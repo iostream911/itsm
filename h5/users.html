@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>用户管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 72px; }
+    .header { background: #1e40af; color: #fff; padding: 14px 50px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .container { max-width: 800px; margin: 0 auto; padding: 16px 16px 80px; }
+
+    /* 统计卡片 */
+    .stats { display: flex; gap: 8px; margin-bottom: 12px; }
+    .stat-item { flex: 1; background: #fff; border-radius: 10px; padding: 12px 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .stat-item:active { transform: scale(0.96); }
+    .stat-item.active { border-color: #2563eb; background: #eff6ff; }
+    .stat-num { font-size: 22px; font-weight: 700; transition: color 0.2s; }
+    .stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    /* 搜索框 */
+    .search-box { margin-bottom: 12px; }
+    .search-box input { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; outline: none; background: #fff; }
+    .search-box input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+    /* 用户列表 */
+    .user-row { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 12px; cursor: pointer; transition: box-shadow 0.15s; }
+    .user-row:active { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .user-avatar { width: 40px; height: 40px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #fff; flex-shrink: 0; }
+    .avatar-admin { background: #7c3aed; }
+    .avatar-agent { background: #2563eb; }
+    .avatar-customer { background: #6b7280; }
+    .user-info { flex: 1; min-width: 0; }
+    .user-name { font-size: 14px; font-weight: 500; color: #111827; }
+    .user-meta { font-size: 12px; color: #6b7280; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { font-size: 11px; padding: 3px 8px; border-radius: 8px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+    .role-admin { background: #ede9fe; color: #7c3aed; }
+    .role-agent { background: #dbeafe; color: #2563eb; }
+    .role-customer { background: #f3f4f6; color: #6b7280; }
+
+    /* 详情弹窗 */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet { background: #fff; width: 100%; max-width: 500px; max-height: 85vh; border-radius: 16px 16px 0 0; overflow-y: auto; animation: slideUp 0.25s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 36px; height: 4px; background: #d1d5db; border-radius: 2px; margin: 10px auto 0; }
+    .modal-content { padding: 16px 20px 32px; }
+    .detail-avatar { width: 56px; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; color: #fff; margin: 0 auto 12px; }
+    .detail-name { text-align: center; font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+    .detail-role-badge { text-align: center; margin-bottom: 20px; }
+    .detail-row { display: flex; margin-bottom: 10px; font-size: 14px; }
+    .detail-label { color: #6b7280; width: 64px; flex-shrink: 0; }
+    .detail-value { color: #111827; flex: 1; word-break: break-all; }
+    .detail-divider { border: none; border-top: 1px solid #f3f4f6; margin: 16px 0; }
+    .section-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px; }
+    .detail-action { display: flex; gap: 8px; margin-top: 20px; }
+    .detail-action select { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+    .detail-action button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+
+    .empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    .bottom-nav { display: flex; gap: 12px; margin-top: 16px; }
+    .bottom-nav a { flex: 1; text-align: center; padding: 10px; background: #fff; border-radius: 8px; color: #2563eb; text-decoration: none; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  </style>
+</head>
+<body>
+  <div class="header">用户管理<button class="logout-btn" onclick="localStorage.clear();location.href='login.html'">退出</button></div>
+  <div class="container">
+
+    <div class="stats" id="statsCards"></div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="搜索姓名、邮箱、手机号...">
+    </div>
+    <div id="userList"><div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div></div>
+    <div class="bottom-nav">
+      <a href="admin.html">管理看板</a>
+      <a href="submit.html">用户端</a>
+    </div>
+  </div>
+
+  <!-- 详情弹窗 -->
+  <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api/v1';
+    let allUsers = [];
+    let currentFilter = 'all';
+
+    // ── 统计卡片点击筛选 ──
+    document.getElementById('statsCards').addEventListener('click', (e) => {
+      const item = e.target.closest('.stat-item');
+      if (!item) return;
+      currentFilter = (currentFilter === item.dataset.filter) ? 'all' : item.dataset.filter;
+      renderUsers();
+    });
+
+    // ── 搜索 ──
+    document.getElementById('searchInput').addEventListener('input', renderUsers);
+
+    async function loadUsers() {
+      try {
+        const res = await fetch(`${API}/users?expand=true&limit=200`, { headers: {} });
+        const data = await res.json();
+        allUsers = Array.isArray(data) ? data : [];
+        renderUsers();
+      } catch (e) {
+        document.getElementById('userList').innerHTML = '<div class="empty">加载失败</div>';
+      }
+    }
+
+    function renderUsers() {
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      // 过滤
+      let users = allUsers;
+
+      // 角色筛选
+      if (currentFilter === 'admin') {
+        users = users.filter(u => (u.role_ids||[]).includes(1));
+      } else if (currentFilter === 'agent') {
+        users = users.filter(u => (u.role_ids||[]).includes(2) && !(u.role_ids||[]).includes(1));
+      } else if (currentFilter === 'customer') {
+        users = users.filter(u => !(u.role_ids||[]).some(r => [1,2].includes(r)));
+      }
+
+      // 模糊搜索
+      if (keyword) {
+        users = users.filter(u => {
+          const name = [u.firstname, u.lastname, u.login, u.email, u.phone, u.mobile].filter(Boolean).join(' ').toLowerCase();
+          return name.includes(keyword);
+        });
+      }
+
+      // 统计
+      const admins   = allUsers.filter(u => (u.role_ids||[]).includes(1)).length;
+      const agents   = allUsers.filter(u => (u.role_ids||[]).includes(2) && !(u.role_ids||[]).includes(1)).length;
+      const customers = allUsers.filter(u => !(u.role_ids||[]).some(r => [1,2].includes(r))).length;
+
+      document.getElementById('statsCards').innerHTML = `
+        <div class="stat-item${currentFilter==='admin'?' active':''}" data-filter="admin">
+          <div class="stat-num" style="color:#7c3aed">${admins}</div><div class="stat-label">管理员</div>
+        </div>
+        <div class="stat-item${currentFilter==='agent'?' active':''}" data-filter="agent">
+          <div class="stat-num" style="color:#2563eb">${agents}</div><div class="stat-label">IT运维</div>
+        </div>
+        <div class="stat-item${currentFilter==='customer'?' active':''}" data-filter="customer">
+          <div class="stat-num" style="color:#6b7280">${customers}</div><div class="stat-label">普通用户</div>
+        </div>
+        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all">
+          <div class="stat-num">${allUsers.length}</div><div class="stat-label">总计</div>
+        </div>
+      `;
+
+      document.getElementById('userList').innerHTML = users.length === 0
+        ? '<div class="empty">未找到匹配的用户</div>'
+        : users.map(u => {
+            const isAdmin  = (u.role_ids||[]).includes(1);
+            const isAgent  = (u.role_ids||[]).includes(2);
+            const roleLabel = isAdmin ? '管理员' : isAgent ? 'IT运维' : '普通用户';
+            const roleClass = isAdmin ? 'role-admin' : isAgent ? 'role-agent' : 'role-customer';
+            const avatarClass = isAdmin ? 'avatar-admin' : isAgent ? 'avatar-agent' : 'avatar-customer';
+            const name = u.firstname || u.lastname ? `${u.firstname||''} ${u.lastname||''}`.trim() : (u.login || u.email || u.phone || '-');
+            const contact = [u.email, u.phone, u.mobile].filter(Boolean).join(' · ') || '无联系方式';
+
+            return `<div class="user-row" onclick="openDetail(${u.id})">
+              <div class="user-avatar ${avatarClass}">${name.charAt(0).toUpperCase()}</div>
+              <div class="user-info">
+                <div class="user-name">${name}</div>
+                <div class="user-meta">${contact}${isAgent && u.vip ? ' · ⭐VIP' : ''}</div>
+              </div>
+              <span class="user-role ${roleClass}">${roleLabel}</span>
+            </div>`;
+          }).join('');
+    }
+
+    // ── 用户详情弹窗 ──
+    async function openDetail(userId) {
+      document.getElementById('modalOverlay').style.display = 'flex';
+      document.getElementById('modalContent').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
+      document.body.style.overflow = 'hidden';
+
+      try {
+        const res = await fetch(`${API}/users/${userId}?expand=true`, { headers: {} });
+        const u = await res.json();
+
+        const isAdmin  = (u.role_ids||[]).includes(1);
+        const isAgent  = (u.role_ids||[]).includes(2);
+        const roleLabel = isAdmin ? '管理员' : isAgent ? 'IT运维' : '普通用户';
+        const avatarClass = isAdmin ? 'avatar-admin' : isAgent ? 'avatar-agent' : 'avatar-customer';
+        const name = u.firstname || u.lastname ? `${u.firstname||''} ${u.lastname||''}`.trim() : (u.login || u.email || u.phone || '-');
+
+        // 组织信息
+        const orgs = (u.organization_ids || []);
+        const orgNames = orgs.length > 0 ? orgs.join(', ') : '无';
+
+        // 分组信息
+        const groupNames = u.group_ids && typeof u.group_ids === 'object'
+          ? Object.values(u.group_ids).filter(v => v !== 'full').join(', ')
+          : '无';
+
+        // 工单统计
+        const ticketsOpen  = u.preferences?.tickets_open  ?? '-';
+        const ticketsClosed = u.preferences?.tickets_closed ?? '-';
+
+        document.getElementById('modalContent').innerHTML = `
+          <div class="detail-avatar ${avatarClass}">${name.charAt(0).toUpperCase()}</div>
+          <div class="detail-name">${name}</div>
+          <div class="detail-role-badge"><span class="user-role ${isAdmin?'role-admin':isAgent?'role-agent':'role-customer'}">${roleLabel}</span></div>
+
+          <div class="section-title">基本信息</div>
+          <div class="detail-row"><span class="detail-label">用户ID</span><span class="detail-value">${u.id}</span></div>
+          <div class="detail-row"><span class="detail-label">登录名</span><span class="detail-value">${u.login || '-'}</span></div>
+          <div class="detail-row"><span class="detail-label">邮箱</span><span class="detail-value">${u.email || '-'}</span></div>
+          <div class="detail-row"><span class="detail-label">手机</span><span class="detail-value">${u.phone || u.mobile || '-'}</span></div>
+          <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${u.active ? '✅ 正常' : '❌ 禁用'}</span></div>
+          <div class="detail-row"><span class="detail-label">注册时间</span><span class="detail-value">${u.created_at ? new Date(u.created_at).toLocaleString('zh-CN') : '-'}</span></div>
+          <div class="detail-row"><span class="detail-label">最后登录</span><span class="detail-value">${u.last_login ? new Date(u.last_login).toLocaleString('zh-CN') : '从未登录'}</span></div>
+
+          <hr class="detail-divider">
+          <div class="section-title">组织与分组</div>
+          <div class="detail-row"><span class="detail-label">组织</span><span class="detail-value">${orgNames}</span></div>
+          <div class="detail-row"><span class="detail-label">分组</span><span class="detail-value">${groupNames}</span></div>
+
+          <hr class="detail-divider">
+          <div class="section-title">工单统计</div>
+          <div class="detail-row"><span class="detail-label">进行中</span><span class="detail-value">${ticketsOpen}</span></div>
+          <div class="detail-row"><span class="detail-label">已完成</span><span class="detail-value">${ticketsClosed}</span></div>
+
+          <hr class="detail-divider">
+          <div class="section-title">修改角色</div>
+          <div class="detail-action">
+            <select id="roleSelect">
+              <option value="admin" ${isAdmin?'selected':''}>管理员</option>
+              <option value="agent" ${isAgent&&!isAdmin?'selected':''}>IT运维</option>
+              <option value="customer" ${!isAdmin&&!isAgent?'selected':''}>普通用户</option>
+            </select>
+            <button onclick="changeRole(${u.id})">保存</button>
+          </div>
+          ${isAgent ? `
+          <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:14px;color:#374151;">VIP 优先派单</span>
+            <button onclick="toggleVip(${u.id},${u.vip?true:false})" style="padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer;${u.vip?'background:#fef3c7;color:#92400e;border:1px solid #fcd34d;':'background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;'}">${u.vip?'⭐ VIP（点击取消）':'启用 VIP'}</button>
+          </div>` : ''}
+        `;
+      } catch (e) {
+        document.getElementById('modalContent').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">加载失败</div>';
+      }
+    }
+
+    async function changeRole(userId) {
+      const roleVal = document.getElementById('roleSelect').value;
+      const roleMap = { admin: [1,2,3], agent: [2,3], customer: [3] };
+      const roleIds = roleMap[roleVal];
+      const labels = { admin: '管理员', agent: 'IT运维', customer: '普通用户' };
+      if (!confirm(`确定修改为「${labels[roleVal]}」吗？`)) return;
+      try {
+        await fetch(`${API}/users/${userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role_ids: roleIds })
+        });
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.body.style.overflow = '';
+        loadUsers();
+      } catch (e) {
+        alert('修改失败');
+      }
+    }
+
+    function closeModal(e) {
+      if (e && e.target !== document.getElementById('modalOverlay')) return;
+      document.getElementById('modalOverlay').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    // ── 权限检查 ──
+    if (localStorage.getItem('it_role') !== 'admin') {
+      window.location.href = 'submit.html';
+    }
+
+    // 底部导航
+    document.addEventListener('DOMContentLoaded', () => {
+      const nav = document.createElement('nav');
+      nav.className = 'bottom-bar';
+      nav.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e7eb;display:flex;z-index:50;padding:6px 0 env(safe-area-inset-bottom,8px);';
+      [{id:'submit',icon:'📝',label:'提交工单',href:'submit.html'},{id:'list',icon:'📋',label:'我的工单',href:'list.html'},{id:'agent',icon:'📊',label:'我的看板',href:'agent.html'},{id:'admin',icon:'🖥️',label:'管理看板',href:'admin.html'},{id:'users',icon:'👥',label:'用户管理',href:'users.html'}].forEach(item => {
+        const a = document.createElement('a');
+        a.className = 'nav-item' + (item.id==='users'?' active':'');
+        a.href = item.href;
+        a.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;color:'+(item.id==='users'?'#2563eb':'#9ca3af')+';text-decoration:none;font-size:10px;';
+        a.innerHTML = '<span style="font-size:20px;line-height:1;margin-bottom:2px;">'+item.icon+'</span>'+item.label;
+        nav.appendChild(a);
+      });
+      document.body.appendChild(nav);
+      document.body.style.paddingBottom = '72px';
+    });
+
+
+    async function toggleVip(userId, currentVip) {
+      try {
+        await fetch(`${API}/users/${userId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vip: !currentVip })
+        });
+        document.getElementById("modalOverlay").style.display = "none";
+        document.body.style.overflow = "";
+        loadUsers();
+      } catch(e) { alert("操作失败"); }
+    }
+
+    loadUsers();
+  </script>
+</body>
+</html>

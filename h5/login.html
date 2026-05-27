@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>IT服务中心 - 登录</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 360px;
+    }
+
+    /* ── Header ── */
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .brand-icon {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .brand h1 { font-size: 22px; font-weight: 600; color: #111827; letter-spacing: 0.5px; }
+    .brand p  { font-size: 13px; color: #6b7280; margin-top: 4px; }
+
+    /* ── Form Card ── */
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 24px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    }
+
+    .field { margin-bottom: 20px; }
+    .field-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    /* ── 手机号输入（独占一行） ── */
+    .input-phone {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 16px;
+      color: #111827;
+      background: #f9fafb;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      -webkit-appearance: none;
+    }
+    .input-phone:focus {
+      border-color: #2563eb;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+    }
+    .input-phone::placeholder { color: #9ca3af; }
+
+    /* ── 发送验证码按钮（手机号下方独占一行） ── */
+    .btn-send {
+      width: 100%;
+      height: 44px;
+      margin-top: 10px;
+      background: #fff;
+      color: #2563eb;
+      border: 1.5px solid #2563eb;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-send:active { background: #eff6ff; }
+    .btn-send:disabled {
+      color: #9ca3af;
+      border-color: #e5e7eb;
+      background: #f9fafb;
+      cursor: not-allowed;
+    }
+
+    /* ── 验证码输入 ── */
+    .input-code {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 16px;
+      color: #111827;
+      background: #f9fafb;
+      outline: none;
+      letter-spacing: 8px;
+      text-align: center;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      -webkit-appearance: none;
+    }
+    .input-code:focus {
+      border-color: #2563eb;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+    }
+    .input-code::placeholder {
+      letter-spacing: normal;
+      text-align: left;
+    }
+
+    /* ── 登录按钮 ── */
+    .btn-login {
+      width: 100%;
+      height: 48px;
+      margin-top: 4px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-login:active { background: #1d4ed8; }
+    .btn-login:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+
+    /* ── 消息提示 ── */
+    .msg {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 16px;
+      min-height: 20px;
+      line-height: 20px;
+    }
+    .msg.error  { color: #ef4444; }
+    .msg.success { color: #059669; }
+
+    /* ── 底部提示 ── */
+    .footer-tip {
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="brand-icon">&#128736;</div>
+      <h1>IT 服务中心</h1>
+      <p>使用手机号登录</p>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+      <form id="loginForm">
+
+        <!-- 手机号 -->
+        <div class="field">
+          <label class="field-label" for="phone">手机号</label>
+          <input type="tel" id="phone" class="input-phone" placeholder="请输入手机号" maxlength="11" autocomplete="tel" required>
+          <button type="button" id="sendBtn" class="btn-send" onclick="sendCode()">获取验证码</button>
+        </div>
+
+        <!-- 验证码 -->
+        <div class="field">
+          <label class="field-label" for="code">验证码</label>
+          <input type="text" id="code" class="input-code" placeholder="输入6位验证码" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required>
+        </div>
+
+        <!-- 登录 -->
+        <button type="submit" id="loginBtn" class="btn-login">登 录</button>
+
+      </form>
+
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="footer-tip">演示模式：点击获取验证码后，验证码将直接显示在页面中</div>
+
+  </div>
+
+  <script>
+    // 已登录直接跳转
+    if (localStorage.getItem('it_token')) {
+      window.location.href = 'submit.html';
+    }
+
+    let countdown = 0;
+    let timer = null;
+
+    async function sendCode() {
+      const phone = document.getElementById('phone').value.trim();
+      if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+        showMsg('请输入正确的手机号', 'error');
+        return;
+      }
+      if (countdown > 0) return;
+
+      const btn = document.getElementById('sendBtn');
+      try {
+        const res = await fetch('/auth/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          if (data.demo_code) {
+            showMsg(`验证码：<b style="font-size:22px;letter-spacing:4px;">${data.demo_code}</b>（5分钟有效）`, 'success');
+          } else {
+            showMsg(data.message, 'success');
+          }
+          countdown = 60;
+          btn.disabled = true;
+          timer = setInterval(() => {
+            countdown--;
+            btn.textContent = `${countdown} 秒后重新获取`;
+            if (countdown <= 0) {
+              clearInterval(timer);
+              btn.textContent = '重新获取验证码';
+              btn.disabled = false;
+            }
+          }, 1000);
+        } else {
+          showMsg(data.error, 'error');
+        }
+      } catch (e) {
+        showMsg('网络异常，请重试', 'error');
+      }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const phone = document.getElementById('phone').value.trim();
+      const code = document.getElementById('code').value.trim();
+      const btn = document.getElementById('loginBtn');
+
+      if (!phone || !code) return;
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          localStorage.setItem('it_token', data.token);
+          localStorage.setItem('it_phone', data.phone);
+          localStorage.setItem('it_name', data.name);
+          localStorage.setItem('it_role', data.role || 'customer');
+          showMsg('登录成功', 'success');
+          setTimeout(() => { window.location.href = 'submit.html'; }, 400);
+        } else {
+          showMsg(data.error, 'error');
+          btn.disabled = false;
+          btn.textContent = '登 录';
+        }
+      } catch (e) {
+        showMsg('网络异常，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = '登 录';
+      }
+    });
+
+    function showMsg(html, type) {
+      const el = document.getElementById('msg');
+      el.innerHTML = html;
+      el.className = 'msg ' + (type || '');
+    }
+  </script>
+</body>
+</html>

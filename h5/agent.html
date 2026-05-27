@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>我的看板</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 72px; }
+    .header { background: #1e40af; color: #fff; padding: 14px 20px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+    .stats { display: flex; gap: 8px; margin-bottom: 16px; }
+    .stat-item { flex: 1; background: #fff; border-radius: 10px; padding: 12px 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; }
+    .stat-item:active { transform: scale(0.96); }
+    .stat-item.active { border-color: #2563eb; background: #eff6ff; }
+    .stat-num { font-size: 22px; font-weight: 700; }
+    .stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .ticket-row { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; }
+    .ticket-row:active { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .ticket-info { flex: 1; min-width: 0; }
+    .ticket-number { font-weight: 600; font-size: 13px; color: #2563eb; }
+    .ticket-title { font-size: 14px; color: #111827; margin: 2px 0; }
+    .ticket-meta { font-size: 11px; color: #9ca3af; }
+    .ticket-status { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+    .status-new { background: #fef3c7; color: #92400e; }
+    .status-open { background: #dbeafe; color: #1e40af; }
+    .status-pending { background: #fce7f3; color: #831843; }
+    .status-closed { background: #d1fae5; color: #065f46; }
+    .empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet { background: #fff; width: 100%; max-width: 500px; max-height: 85vh; border-radius: 16px 16px 0 0; overflow-y: auto; animation: slideUp 0.25s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 36px; height: 4px; background: #d1d5db; border-radius: 2px; margin: 10px auto 0; }
+    .modal-content { padding: 16px 20px 32px; }
+    .detail-number { font-size: 13px; color: #2563eb; font-weight: 600; margin-bottom: 4px; }
+    .detail-title { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+    .detail-row { display: flex; margin-bottom: 8px; font-size: 14px; }
+    .detail-label { color: #6b7280; width: 56px; flex-shrink: 0; }
+    .detail-value { color: #111827; flex: 1; }
+    .detail-divider { border: none; border-top: 1px solid #f3f4f6; margin: 12px 0; }
+    .section-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px; }
+    .article-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
+    .article-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .article-author { font-size: 13px; font-weight: 500; color: #111827; }
+    .article-time { font-size: 11px; color: #9ca3af; }
+    .article-body { font-size: 14px; color: #374151; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .action-bar { display: flex; gap: 8px; margin-top: 12px; }
+    .action-bar button { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .reply-box { margin-top: 16px; border-top: 1px solid #f3f4f6; padding-top: 16px; }
+    .reply-box textarea { width: 100%; min-height: 80px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; }
+    .reply-box textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .reply-box button { margin-top: 8px; padding: 8px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .reply-box button:disabled { background: #93c5fd; }
+    .btn-close { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .btn-reopen { background: #f0fdf4; color: #059669; border: 1px solid #a7f3d0; }
+    .btn-transfer { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+    .transfer-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+    .transfer-row select { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
+    .transfer-row button { padding: 6px 12px; background: #ea580c; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e5e7eb; display: flex; z-index: 50; padding: 6px 0 env(safe-area-inset-bottom, 8px); }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 0; color: #9ca3af; text-decoration: none; font-size: 10px; cursor: pointer; border: none; background: none; }
+    .nav-item .icon { font-size: 20px; line-height: 1; margin-bottom: 2px; }
+    .nav-item.active { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="header">我的看板<button class="logout-btn" onclick="logout()">退出</button></div>
+  <div class="container">
+    <div class="stats" id="statsCards"></div>
+    <div id="ticketList"><div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div></div>
+  </div>
+
+  <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="modal-content" id="modalContent"></div></div>
+  </div>
+
+  <nav class="bottom-bar" id="bottomNav"></nav>
+
+  <script>
+    const PAGE = 'agent';
+    function getToken()  { return localStorage.getItem('it_token'); }
+    function logout()    { localStorage.clear(); window.location.href = 'login.html'; }
+
+    function buildNav(role) {
+      const items = [
+        { id: 'submit', icon: '📝', label: '提交工单', href: 'submit.html', roles: ['admin','agent','customer'] },
+        { id: 'list',   icon: '📋', label: '我的工单', href: 'list.html',   roles: ['admin','agent','customer'] },
+        { id: 'agent',  icon: '📊', label: '我的看板', href: 'agent.html',  roles: ['admin','agent'] },
+        { id: 'admin',  icon: '🖥️', label: '管理看板', href: 'admin.html',  roles: ['admin'] },
+        { id: 'users',  icon: '👥', label: '用户管理', href: 'users.html',  roles: ['admin'] }
+      ];
+      return items.filter(i => i.roles.includes(role)).map(i => `<a class="nav-item${PAGE===i.id?' active':''}" href="${i.href}"><span class="icon">${i.icon}</span>${i.label}</a>`).join('');
+    }
+
+    async function initAuth() {
+      const token = getToken();
+      if (!token) { logout(); return false; }
+      if (localStorage.getItem('it_role') === 'customer') { window.location.href = 'submit.html'; return false; }
+      try {
+        const res = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.status === 401) { logout(); return false; }
+        if (!res.ok) return true;
+        const data = await res.json();
+        localStorage.setItem('it_token', data.token);
+        localStorage.setItem('it_role', data.role || 'customer');
+        if (data.role === 'customer') { window.location.href = 'submit.html'; return false; }
+        document.querySelector('.header').insertAdjacentHTML('beforeend', `<div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">${data.phone} (${data.role==='admin'?'管理员':'IT运维'})</div>`);
+        document.getElementById('bottomNav').innerHTML = buildNav(data.role);
+        return true;
+      } catch (e) { return true; }
+    }
+
+    function apiFetch(url, options = {}) {
+      return fetch(url, { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${getToken()}` } })
+        .then(res => { if (res.status===401) { logout(); throw new Error('登录已过期'); } return res; });
+    }
+
+    const statusMap = { 1: ['待处理', 'status-new'], 2: ['已打开', 'status-open'], 3: ['待提醒', 'status-pending'], 4: ['已关闭', 'status-closed'], 5: ['已合并', 'status-closed'], 6: ['待关闭', 'status-pending'] };
+    let allTickets = [], currentFilter = 'open', now = Date.now();
+
+    document.getElementById('statsCards').addEventListener('click', e => {
+      const item = e.target.closest('.stat-item');
+      if (!item) return;
+      currentFilter = currentFilter===item.dataset.filter ? 'all' : item.dataset.filter;
+      renderList(); updateStats();
+    });
+
+    async function loadDashboard() {
+      try {
+        const res = await apiFetch('/my-dashboard');
+        const data = await res.json();
+        allTickets = Array.isArray(data) ? data : [];
+        now = Date.now();
+        renderList(); updateStats();
+      } catch (e) { if (e.message==='登录已过期') return; }
+    }
+
+    function updateStats() {
+      const openC = allTickets.filter(t => ![4,5].includes(t.state_id)).length;
+      const closedC = allTickets.filter(t => [4,5].includes(t.state_id)).length;
+      const overdueC = allTickets.filter(t => ![4,5].includes(t.state_id) && (now-new Date(t.created_at).getTime())>4*3600*1000).length;
+      document.getElementById('statsCards').innerHTML = `
+        <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${openC}</div><div class="stat-label">待处理</div></div>
+        <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${closedC}</div><div class="stat-label">已完成</div></div>
+        <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${overdueC}</div><div class="stat-label">超时</div></div>
+        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all"><div class="stat-num">${allTickets.length}</div><div class="stat-label">总计</div></div>
+      `;
+    }
+
+    function renderList() {
+      let tickets = allTickets;
+      if (currentFilter==='open') tickets = allTickets.filter(t => ![4,5].includes(t.state_id));
+      if (currentFilter==='closed') tickets = allTickets.filter(t => [4,5].includes(t.state_id));
+      if (currentFilter==='overdue') tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && (now-new Date(t.created_at).getTime())>4*3600*1000);
+      document.getElementById('ticketList').innerHTML = tickets.length===0
+        ? '<div class="empty">暂无数据</div>'
+        : tickets.map(t => {
+            const [label,cls] = statusMap[t.state_id]||['未知',''];
+            return `<div class="ticket-row" onclick="openDetail(${t.id})"><div class="ticket-info"><span class="ticket-number">#${t.number||t.id}</span><span style="font-size:11px;color:#6b7280;margin-left:6px;">${statusMap[t.state_id]?.[0]||'?'}</span><div class="ticket-title">${t.title}</div><div class="ticket-meta">${t.group||''} · ${t.customer||''} · ${new Date(t.created_at).toLocaleString('zh-CN')}</div></div><span class="ticket-status ${cls}">${label}</span></div>`;
+          }).join('');
+    }
+
+    async function openDetail(id) {
+      document.getElementById('modalOverlay').style.display='flex';
+      document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;">加载中...</div>';
+      document.body.style.overflow='hidden';
+      try {
+        const [tRes,aRes] = await Promise.all([apiFetch(`/api/v1/tickets/${id}?expand=true`), apiFetch(`/api/v1/ticket_articles/by_ticket/${id}`)]);
+        const ticket = await tRes.json(); const articles = await aRes.json();
+        const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        const [label] = statusMap[ticket.state_id]||['未知'];
+        document.getElementById('modalContent').innerHTML = `
+          <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>
+          <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${label}</span></div>
+          <div class="detail-row"><span class="detail-label">分组</span><span class="detail-value">${ticket.group||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">客户</span><span class="detail-value">${ticket.customer||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">创建</span><span class="detail-value">${new Date(ticket.created_at).toLocaleString('zh-CN')}</span></div>
+          <hr class="detail-divider"><div class="section-title">沟通记录</div>
+          ${list.length===0?'<div style="color:#9ca3af;text-align:center;padding:16px;">暂无</div>':list.map(a=>`<div class="article-item"><div class="article-header"><span class="article-author">${a.sender==='Customer'?'客户':(a.from||a.created_by||'系统')}</span><span class="article-time">${new Date(a.created_at).toLocaleString('zh-CN')}</span></div><div class="article-body">${(a.body||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div>`).join('')}
+          <div class="action-bar">
+            ${[4,5].includes(ticket.state_id)?`<button class="btn-reopen" onclick="closeTicket(${ticket.id},'open')">重新打开</button>`:`<button class="btn-close" onclick="closeTicket(${ticket.id},'close')">关闭工单</button>`}
+            ${[4,5].includes(ticket.state_id)?'':`<button class="btn-transfer" onclick="showTransfer(${ticket.id})">转派</button>`}
+          </div>
+          <div class="transfer-row" id="transferRow" style="display:none;">
+            <select id="transferAgent"></select>
+            <button onclick="doTransfer(${ticket.id})">确认转派</button>
+            <button onclick="document.getElementById('transferRow').style.display='none'" style="padding:6px 12px;background:#f3f4f6;color:#6b7280;border:none;border-radius:6px;font-size:12px;cursor:pointer;">取消</button>
+          </div>
+          ${[4,5].includes(ticket.state_id) ? '' : `
+          <div class="reply-box">
+            <div class="section-title">回复客户</div>
+            <textarea id="replyText" placeholder="输入回复内容..."></textarea>
+            <button onclick="sendReply(${ticket.id})">发送回复</button>
+            <span id="replyStatus" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+          </div>`}
+        `;
+      } catch (e) { if (e.message==='登录已过期') return; }
+    }
+
+    // ── 转派 ──
+    let agentCache = [];
+    async function loadAgentList() {
+      try {
+        const res = await apiFetch('/api/v1/users?expand=true&limit=50');
+        const data = await res.json();
+        agentCache = Array.isArray(data) ? data.filter(u => (u.role_ids||[]).includes(2)) : [];
+      } catch(e) {}
+    }
+
+    async function showTransfer(ticketId) {
+      // 获取当前工单信息
+      const res = await apiFetch(`/api/v1/tickets/${ticketId}?expand=true`);
+      const ticket = await res.json();
+      const currentOwnerId = ticket.owner_id;
+
+      // 填充运维人员列表（排除当前处理人，附带分组信息）
+      const select = document.getElementById('transferAgent');
+      select.innerHTML = '<option value="">请选择...</option>' + agentCache
+        .filter(a => a.id !== currentOwnerId)
+        .map(a => {
+          const groups = Object.keys(a.groups || {});
+          const grp = groups.filter(g => g !== 'Users')[0] || groups[0] || '';
+          return `<option value="${a.id}" data-group="${grp}">${a.firstname||''}${a.lastname||''} · ${grp || '未分组'}</option>`;
+        })
+        .join('');
+      document.getElementById('transferRow').style.display = 'flex';
+    }
+
+    async function doTransfer(ticketId) {
+      const select = document.getElementById('transferAgent');
+      const newOwnerId = parseInt(select.value);
+      const newGroup = select.options[select.selectedIndex].dataset.group;
+      if (!newOwnerId) return;
+      if (!confirm('确定转派给该运维人员吗？')) return;
+      try {
+        // 同时更新处理人和分组（Zammad要求处理人必须在工单所属分组内）
+        const body = { owner_id: newOwnerId };
+        if (newGroup) body.group = newGroup;
+        const res = await apiFetch(`/api/v1/tickets/${ticketId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          await apiFetch(`/api/v1/tickets/${ticketId}/transfer-notify`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_owner_id: newOwnerId })
+          }).catch(() => {});
+          alert('转派成功');
+          document.getElementById('modalOverlay').style.display = 'none';
+          document.body.style.overflow = '';
+          loadDashboard();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert('转派失败: ' + (err.error || '未知错误'));
+        }
+      } catch(e) { if (e.message==='登录已过期') return; alert('转派失败'); }
+    }
+
+    async function closeTicket(id, action) {
+      if (!confirm(`确定${action==='close'?'关闭':'重新打开'}吗？`)) return;
+      await apiFetch(`/api/v1/tickets/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state_id:action==='close'?4:2}) });
+      document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow='';
+      loadDashboard();
+    }
+
+    async function sendReply(ticketId) {
+      const text = document.getElementById('replyText').value.trim();
+      if (!text) return;
+      const btn = document.querySelector('.reply-box button');
+      const status = document.getElementById('replyStatus');
+      btn.disabled = true; status.textContent = '发送中...';
+      try {
+        await apiFetch('/api/v1/ticket_articles', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: ticketId, subject: '回复', body: text, type: 'note', sender: 'Agent', content_type: 'text/plain' })
+        });
+        document.getElementById('replyText').value = '';
+        status.textContent = '已发送';
+        // 刷新详情
+        openDetail(ticketId);
+      } catch (e) {
+        status.textContent = '发送失败';
+      } finally { btn.disabled = false; }
+    }
+
+    function closeModal(e) { if (e&&e.target!==document.getElementById('modalOverlay')) return; document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow=''; }
+
+    initAuth().then(() => { loadAgentList(); loadDashboard(); });
+  </script>
+</body>
+</html>

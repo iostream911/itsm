@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>IT服务管理台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 72px; }
+    .header { background: #1e40af; color: #fff; padding: 14px 50px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .stat-item { background: #fff; border-radius: 10px; padding: 14px 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .stat-item:active { transform: scale(0.96); }
+    .stat-item.active { border-color: #2563eb; background: #eff6ff; }
+    .stat-num { font-size: 24px; font-weight: 700; transition: color 0.2s; }
+    .stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .section { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .section-title { font-size: 15px; font-weight: 600; color: #111827; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+    .badge-warn { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .ticket-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+    .ticket-row:last-child { border-bottom: none; }
+    .ticket-info { flex: 1; min-width: 0; }
+    .ticket-number { font-weight: 600; font-size: 13px; color: #2563eb; }
+    .ticket-title { font-size: 14px; color: #111827; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticket-meta { font-size: 11px; color: #9ca3af; }
+    .ticket-action select, .ticket-action button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: #fff; cursor: pointer; }
+    .ticket-action select:focus { outline: none; border-color: #2563eb; }
+    .assign-btn { color: #2563eb; border-color: #2563eb !important; font-weight: 500; }
+    .refresh-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .refresh-btn { padding: 6px 14px; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .auto-refresh { font-size: 12px; color: #6b7280; }
+    .bottom-nav { display: flex; gap: 12px; margin-top: 16px; }
+    .bottom-nav a { flex: 1; text-align: center; padding: 10px; background: #fff; border-radius: 8px; color: #2563eb; text-decoration: none; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .time-bar { display: flex; gap: 6px; margin-bottom: 16px; }
+    .time-btn { padding: 6px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #6b7280; transition: all 0.15s; }
+    .time-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet { background: #fff; width: 100%; max-width: 500px; max-height: 85vh; border-radius: 16px 16px 0 0; overflow-y: auto; animation: slideUp 0.25s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 36px; height: 4px; background: #d1d5db; border-radius: 2px; margin: 10px auto 0; }
+    .modal-content { padding: 16px 20px 32px; }
+    .detail-number { font-size: 13px; color: #2563eb; font-weight: 600; margin-bottom: 4px; }
+    .detail-title { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+    .detail-row { display: flex; margin-bottom: 8px; font-size: 14px; }
+    .detail-label { color: #6b7280; width: 64px; flex-shrink: 0; }
+    .detail-value { color: #111827; flex: 1; }
+    .detail-divider { border: none; border-top: 1px solid #f3f4f6; margin: 12px 0; }
+    .section-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px; }
+    .article-item { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
+    .article-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .article-author { font-size: 13px; font-weight: 500; color: #111827; }
+    .article-time { font-size: 11px; color: #9ca3af; }
+    .article-body { font-size: 14px; color: #374151; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="header">IT 服务管理台<button class="logout-btn" onclick="localStorage.clear();location.href='login.html'">退出</button></div>
+  <div class="container">
+    <div class="stats" id="statsCards">
+      <div class="stat-item"><div class="stat-num" style="color:#f59e0b">-</div><div class="stat-label">待分配</div></div>
+      <div class="stat-item"><div class="stat-num" style="color:#2563eb">-</div><div class="stat-label">处理中</div></div>
+      <div class="stat-item"><div class="stat-num" style="color:#059669">-</div><div class="stat-label">已完成</div></div>
+      <div class="stat-item"><div class="stat-num" style="color:#ef4444">-</div><div class="stat-label">超时</div></div>
+    </div>
+
+    <div class="time-bar">
+      <button class="time-btn active" onclick="setTimeRange('today',this)">今天</button>
+      <button class="time-btn" onclick="setTimeRange('week',this)">最近一周</button>
+      <button class="time-btn" onclick="setTimeRange('month',this)">最近一月</button>
+      <button class="time-btn" onclick="setTimeRange('all',this)">全部</button>
+    </div>
+
+    <div class="refresh-bar">
+      <span class="auto-refresh" id="refreshStatus">自动刷新中...</span>
+      <button class="refresh-btn" onclick="loadDashboard()">手动刷新</button>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        <span id="listTitle">待分配工单</span>
+        <span class="badge badge-danger" id="listCount">0</span>
+      </div>
+      <div id="ticketList">
+        <div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <a href="submit.html">用户端-提交</a>
+      <a href="list.html">用户端-我的工单</a>
+      <a href="users.html">用户管理</a>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api/v1';
+
+    const groups = ['桌面运维', '网络运维', '应用系统运维'];
+    const statusMap = { 1: '待处理', 2: '已打开', 3: '待提醒', 4: '已关闭', 5: '已合并', 6: '待关闭' };
+    const filterLabels = { new: '待分配（未指派人）', open: '处理中（已指派）', closed: '已完成工单', overdue: '超时工单', all: '全部工单' };
+    let currentFilter = 'new';
+    let currentTimeRange = 'today';
+    let allAgents = [];
+    let allTicketsCache = [];
+    let now = Date.now();
+
+    function setTimeRange(range, btn) {
+      currentTimeRange = range;
+      document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderList();
+    }
+
+    // 统计卡片点击筛选
+    document.getElementById('statsCards').addEventListener('click', (e) => {
+      const item = e.target.closest('.stat-item');
+      if (!item) return;
+      const f = item.dataset.filter;
+      // 再次点击取消筛选
+      currentFilter = (currentFilter === f) ? 'all' : f;
+      document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active'));
+      if (currentFilter !== 'all') item.classList.add('active');
+      renderList();
+    });
+
+    // 加载处理人列表
+    async function loadAgents() {
+      try {
+        const res = await fetch(`${API}/users?expand=true&limit=50`, { headers: {} });
+        const data = await res.json();
+        // 筛选有 Agent 角色(2)的用户
+        allAgents = Array.isArray(data) ? data.filter(u => (u.role_ids || []).includes(2)) : [];
+      } catch (e) { /* ignore */ }
+    }
+
+    async function loadDashboard() {
+      try {
+        const allRes = await fetch(`${API}/tickets?expand=true`, { headers: {} });
+        const data = await allRes.json();
+        allTicketsCache = Array.isArray(data) ? data : [];
+        now = Date.now();
+
+        const openTickets = allTicketsCache.filter(t => ![4,5].includes(t.state_id));
+        const unassigned = openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length;
+        const processing  = openTickets.filter(t => t.owner_id > 1).length;
+        const closedC    = allTicketsCache.filter(t => [4,5].includes(t.state_id)).length;
+        const overdueC   = openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length;
+
+        document.getElementById('statsCards').innerHTML = `
+          <div class="stat-item${currentFilter==='new'?' active':''}" data-filter="new"><div class="stat-num" style="color:#f59e0b">${unassigned}</div><div class="stat-label">待分配</div></div>
+          <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${processing}</div><div class="stat-label">处理中</div></div>
+          <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${closedC}</div><div class="stat-label">已完成</div></div>
+          <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${overdueC}</div><div class="stat-label">超时 >4h</div></div>
+        `;
+
+        renderList();
+        document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
+      } catch (err) {
+        document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">加载失败</div>';
+      }
+    }
+
+    function renderList() {
+      let allTickets = [...allTicketsCache].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      // 时间范围过滤
+      const nowDate = new Date();
+      const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+      if (currentTimeRange === 'today') {
+        allTickets = allTickets.filter(t => new Date(t.created_at) >= todayStart);
+      } else if (currentTimeRange === 'week') {
+        const weekAgo = new Date(todayStart.getTime() - 7 * 86400000);
+        allTickets = allTickets.filter(t => new Date(t.created_at) >= weekAgo);
+      } else if (currentTimeRange === 'month') {
+        const monthAgo = new Date(todayStart.getTime() - 30 * 86400000);
+        allTickets = allTickets.filter(t => new Date(t.created_at) >= monthAgo);
+      }
+
+      let tickets;
+      switch (currentFilter) {
+        case 'new':     tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && (!t.owner_id || t.owner_id <= 1)); break;
+        case 'open':    tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && t.owner_id > 1); break;
+        case 'closed':  tickets = allTickets.filter(t => [4,5].includes(t.state_id)); break;
+        case 'overdue': tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && (now - new Date(t.created_at).getTime()) > 4*3600*1000); break;
+        default:        tickets = allTickets; break;
+      }
+
+      document.getElementById('listTitle').textContent = filterLabels[currentFilter] || '全部工单';
+      document.getElementById('listCount').textContent = tickets.length;
+
+      document.getElementById('ticketList').innerHTML = tickets.length === 0
+        ? '<div style="text-align:center;padding:40px;color:#9ca3af;">暂无工单</div>'
+        : tickets.map(t => `
+          <div class="ticket-row" style="cursor:pointer;">
+            <div class="ticket-info" onclick="openDetail(${t.id})">
+              <span class="ticket-number">#${t.number || t.id}</span>
+              <span style="font-size:12px;color:#6b7280;margin-left:6px;">${statusMap[t.state_id] || '未知'}</span>
+              <div class="ticket-title">${t.title}</div>
+              <div class="ticket-meta">
+                ${t.group || '未分组'} · <b>${t.owner && t.owner !== '-' ? t.owner : '⚠ 未分配'}</b> · ${t.customer || ''} · ${new Date(t.created_at).toLocaleString('zh-CN')}
+                ${(now - new Date(t.created_at).getTime()) > 4*3600*1000 ? '<span style="color:#ef4444"> ⚠超时</span>' : ''}
+              </div>
+            </div>
+            <div class="ticket-action" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;" onclick="event.stopPropagation()">
+              <select onchange="assignGroup(${t.id}, this.value)" style="width:130px;">
+                <option value="">分组...</option>
+                ${groups.map(g => `<option value="${g}" ${t.group===g?'selected':''}>${g}</option>`).join('')}
+              </select>
+              <select onchange="assignOwner(${t.id}, this.value)" style="width:130px;">
+                <option value="">处理人...</option>
+                ${allAgents.map(a => `<option value="${a.id}" ${t.owner_id===a.id?'selected':''}>${a.firstname||''}${a.lastname||''}</option>`).join('')}
+              </select>
+              ${[4,5].includes(t.state_id)
+                ? `<button onclick="closeTicket(${t.id}, 'open')" style="width:130px;padding:6px 10px;background:#f0fdf4;color:#059669;border:1px solid #a7f3d0;border-radius:6px;font-size:12px;cursor:pointer;">重新打开</button>`
+                : `<button onclick="closeTicket(${t.id}, 'close')" style="width:130px;padding:6px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-size:12px;cursor:pointer;">关闭工单</button>`
+              }
+            </div>
+          </div>
+        `).join('');
+    }
+
+    async function assignGroup(ticketId, group) {
+      if (!group) return;
+      try {
+        await fetch(`${API}/tickets/${ticketId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ group: group })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert('派单失败');
+      }
+    }
+
+    async function assignOwner(ticketId, ownerId) {
+      if (!ownerId) return;
+      try {
+        await fetch(`${API}/tickets/${ticketId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ owner_id: parseInt(ownerId) })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert('分配处理人失败');
+      }
+    }
+
+    async function closeTicket(ticketId, action) {
+      const stateId = action === 'close' ? 4 : 2; // 4=closed, 2=open
+      const label = action === 'close' ? '关闭' : '重新打开';
+      if (!confirm(`确定${label}该工单吗？`)) return;
+      try {
+        await fetch(`${API}/tickets/${ticketId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state_id: stateId })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert(`${label}失败`);
+      }
+    }
+
+    // ── 权限检查 ──
+    if (localStorage.getItem('it_role') !== 'admin') {
+      window.location.href = 'submit.html';
+    }
+
+    // 底部导航
+    document.addEventListener('DOMContentLoaded', () => {
+      const nav = document.createElement('nav');
+      nav.className = 'bottom-bar';
+      nav.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e7eb;display:flex;z-index:50;padding:6px 0 env(safe-area-inset-bottom,8px);';
+      [{id:'submit',icon:'📝',label:'提交工单',href:'submit.html'},{id:'list',icon:'📋',label:'我的工单',href:'list.html'},{id:'agent',icon:'📊',label:'我的看板',href:'agent.html'},{id:'admin',icon:'🖥️',label:'管理看板',href:'admin.html'},{id:'users',icon:'👥',label:'用户管理',href:'users.html'}].forEach(item => {
+        const a = document.createElement('a');
+        a.className = 'nav-item' + (item.id==='admin'?' active':'');
+        a.href = item.href;
+        a.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;color:'+(item.id==='admin'?'#2563eb':'#9ca3af')+';text-decoration:none;font-size:10px;';
+        a.innerHTML = '<span style="font-size:20px;line-height:1;margin-bottom:2px;">'+item.icon+'</span>'+item.label;
+        nav.appendChild(a);
+      });
+      document.body.appendChild(nav);
+      document.body.style.paddingBottom = '72px';
+    });
+
+    loadAgents().then(() => loadDashboard());
+    setInterval(loadDashboard, 60000);
+
+    async function openDetail(id) {
+      document.getElementById('modalOverlay').style.display='flex';
+      document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
+      document.body.style.overflow='hidden';
+      try {
+        const [tRes,aRes] = await Promise.all([
+          fetch(`${API}/tickets/${id}?expand=true`,{headers:{}}).then(r=>r.json()),
+          fetch(`${API}/ticket_articles/by_ticket/${id}`,{headers:{}}).then(r=>r.json())
+        ]);
+        const ticket = tRes; const articles = aRes;
+        const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        let ownerInfo = null;
+        if (ticket.owner_id>1) { try { ownerInfo=await fetch(`${API}/users/${ticket.owner_id}`,{headers:{}}).then(r=>r.json()); } catch(e){} }
+        const [label] = Object.entries(statusMap).find(([k])=>k==ticket.state_id)||['未知',''];
+        document.getElementById('modalContent').innerHTML = `
+          <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>
+          <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${label}</span></div>
+          <div class="detail-row"><span class="detail-label">分组</span><span class="detail-value">${ticket.group||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">优先级</span><span class="detail-value">${ticket.priority||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">客户</span><span class="detail-value">${ticket.customer||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">创建</span><span class="detail-value">${new Date(ticket.created_at).toLocaleString('zh-CN')}</span></div>
+          ${ticket.close_at?`<div class="detail-row"><span class="detail-label">关闭</span><span class="detail-value">${new Date(ticket.close_at).toLocaleString('zh-CN')}</span></div>`:''}
+          <hr class="detail-divider"><div class="section-title">处理人</div>
+          ${ownerInfo?`<div style="background:#f9fafb;border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;"><div style="width:40px;height:40px;border-radius:20px;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;">${(ownerInfo.firstname||'?')[0]}</div><div><div style="font-weight:500;">${ownerInfo.firstname||''} ${ownerInfo.lastname||''}</div><div style="font-size:12px;color:#6b7280;">${[ownerInfo.email,ownerInfo.phone].filter(Boolean).join(' · ')||'暂无联系方式'}</div></div></div>`:'<div style="color:#9ca3af;text-align:center;padding:16px;">暂未分配处理人</div>'}
+          <hr class="detail-divider"><div class="section-title">沟通记录</div>
+          ${list.length===0?'<div style="color:#9ca3af;text-align:center;padding:16px;">暂无</div>':list.map(a=>`<div class="article-item"><div class="article-header"><span class="article-author">${a.sender==='Customer'?'客户':(a.from||a.created_by||'系统')}</span><span class="article-time">${new Date(a.created_at).toLocaleString('zh-CN')}</span></div><div class="article-body">${(a.body||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div>`).join('')}
+        `;
+      } catch(e) {}
+    }
+    function closeModal(e) { if (e&&e.target!==document.getElementById('modalOverlay')) return; document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow=''; }
+  </script>
+
+<div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="modal-content" id="modalContent"></div></div>
+</div>
+
+</body>
+</html>

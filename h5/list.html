@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>我的工单</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 72px; overscroll-behavior: none; }
+    .header { background: #1e40af; color: #fff; padding: 14px 20px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .container { max-width: 500px; margin: 0 auto; padding: 16px 16px 16px; }
+    .stats { display: flex; gap: 8px; margin-bottom: 16px; }
+    .stat-item { flex: 1; background: #fff; border-radius: 10px; padding: 12px 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .stat-item:active { transform: scale(0.97); }
+    .stat-item.active { border-color: #2563eb; background: #eff6ff; }
+    .stat-num { font-size: 22px; font-weight: 700; color: #111827; transition: color 0.2s; }
+    .stat-item.active .stat-num { color: #2563eb; }
+    .stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .pull-indicator { text-align: center; padding: 0; height: 0; overflow: hidden; font-size: 13px; color: #6b7280; transition: height 0.15s, padding 0.15s; }
+    .pull-indicator.show { height: 44px; padding: 10px 0; }
+    .pull-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #d1d5db; border-radius: 50%; border-top-color: #2563eb; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ticket-card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; transition: box-shadow 0.15s; }
+    .ticket-card:active { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .ticket-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .ticket-number { font-weight: 700; font-size: 14px; color: #2563eb; }
+    .ticket-status { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+    .status-new { background: #fef3c7; color: #92400e; }
+    .status-open { background: #dbeafe; color: #1e40af; }
+    .status-pending { background: #fce7f3; color: #831843; }
+    .status-closed { background: #d1fae5; color: #065f46; }
+    .ticket-title { font-size: 15px; font-weight: 500; color: #111827; margin-bottom: 4px; }
+    .ticket-meta { font-size: 12px; color: #6b7280; }
+    .ticket-time { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+    .urge-btn { margin-top:8px; padding:4px 12px; background:#fff; color:#ef4444; border:1px solid #fecaca; border-radius:6px; font-size:11px; cursor:pointer; }
+    .empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+
+    /* 详情弹窗 */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet { background: #fff; width: 100%; max-width: 500px; max-height: 90vh; border-radius: 16px 16px 0 0; overflow-y: auto; animation: slideUp 0.25s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 36px; height: 4px; background: #d1d5db; border-radius: 2px; margin: 10px auto 0; }
+    .modal-content { padding: 16px 20px 32px; }
+    .detail-number { font-size: 13px; color: #2563eb; font-weight: 600; margin-bottom: 4px; }
+    .detail-title { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+    .detail-row { display: flex; margin-bottom: 8px; font-size: 14px; }
+    .detail-label { color: #6b7280; width: 56px; flex-shrink: 0; }
+    .detail-value { color: #111827; flex: 1; }
+    .detail-divider { border: none; border-top: 1px solid #f3f4f6; margin: 16px 0; }
+    .section-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+    .handler-card { background: #f9fafb; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .handler-avatar { width: 40px; height: 40px; border-radius: 20px; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; }
+    .handler-info { flex: 1; }
+    .handler-name { font-size: 14px; font-weight: 500; color: #111827; }
+    .handler-contact { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .article-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #f3f4f6; }
+    .article-item:last-child { border-bottom: none; }
+    .article-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .article-author { font-size: 13px; font-weight: 500; color: #111827; }
+    .article-time { font-size: 11px; color: #9ca3af; }
+    .article-body { font-size: 14px; color: #374151; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .reply-box { margin-top: 16px; border-top: 1px solid #f3f4f6; padding-top: 16px; }
+    .reply-box textarea { width: 100%; min-height: 80px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; }
+    .reply-box textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .reply-box button { margin-top: 8px; padding: 8px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .reply-box button:disabled { background: #93c5fd; }
+
+    /* 底部导航栏 */
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e5e7eb; display: flex; z-index: 50; padding: 6px 0 env(safe-area-inset-bottom, 8px); }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 0; color: #9ca3af; text-decoration: none; font-size: 10px; transition: color 0.15s; cursor: pointer; border: none; background: none; }
+    .nav-item .icon { font-size: 20px; line-height: 1; margin-bottom: 2px; }
+    .nav-item.active { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="header">我的工单<button class="logout-btn" onclick="logout()">退出</button></div>
+  <div class="container">
+    <div class="stats" id="stats"></div>
+    <div class="pull-indicator" id="pullIndicator"></div>
+    <div id="ticketList"></div>
+  </div>
+
+  <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="modal-content" id="modalContent"></div></div>
+  </div>
+
+  <nav class="bottom-bar" id="bottomNav"></nav>
+
+  <script>
+    const PAGE = 'list';
+    function getToken()  { return localStorage.getItem('it_token'); }
+    function getRole()   { return localStorage.getItem('it_role') || 'customer'; }
+    function logout()    { localStorage.clear(); window.location.href = 'login.html'; }
+
+    function buildNav(role) {
+      const items = [
+        { id: 'submit', icon: '📝', label: '提交工单', href: 'submit.html', roles: ['admin','agent','customer'] },
+        { id: 'list',   icon: '📋', label: '我的工单', href: 'list.html',   roles: ['admin','agent','customer'] },
+        { id: 'agent',  icon: '📊', label: '我的看板', href: 'agent.html',  roles: ['admin','agent'] },
+        { id: 'admin',  icon: '🖥️', label: '管理看板', href: 'admin.html',  roles: ['admin'] },
+        { id: 'users',  icon: '👥', label: '用户管理', href: 'users.html',  roles: ['admin'] }
+      ];
+      return items.filter(item => item.roles.includes(role)).map(item => `<a class="nav-item${PAGE===item.id?' active':''}" href="${item.href}"><span class="icon">${item.icon}</span>${item.label}</a>`).join('');
+    }
+
+    async function initAuth() {
+      const token = getToken();
+      if (!token) { logout(); return false; }
+      try {
+        const res = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.status === 401) { logout(); return false; }
+        if (!res.ok) return true;
+        const data = await res.json();
+        localStorage.setItem('it_token', data.token);
+        localStorage.setItem('it_role', data.role || 'customer');
+        document.querySelector('.header').insertAdjacentHTML('beforeend', `<div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">${data.phone}</div>`);
+        document.getElementById('bottomNav').innerHTML = buildNav(data.role || 'customer');
+        return true;
+      } catch (e) { return true; }
+    }
+
+    function apiFetch(url, options = {}) {
+      return fetch(url, { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${getToken()}` } })
+        .then(res => { if (res.status===401) { logout(); throw new Error('登录已过期'); } return res; });
+    }
+
+    const statusMap = { 1: ['待处理', 'status-new'], 2: ['已打开', 'status-open'], 3: ['待提醒', 'status-pending'], 4: ['已关闭', 'status-closed'], 5: ['已合并', 'status-closed'], 6: ['待关闭', 'status-pending'] };
+    let allTickets = [], currentFilter = 'all';
+
+    document.getElementById('stats').addEventListener('click', (e) => {
+      const item = e.target.closest('.stat-item');
+      if (!item) return;
+      currentFilter = currentFilter===item.dataset.filter ? 'all' : item.dataset.filter;
+      document.querySelectorAll('.stat-item').forEach(el => el.classList.toggle('active', el.dataset.filter===currentFilter));
+      renderTickets();
+    });
+
+    async function loadTickets() {
+      try {
+        const res = await apiFetch('/my-tickets');
+        const data = await res.json();
+        allTickets = Array.isArray(data) ? data : [];
+        updateStats(); renderTickets();
+      } catch (err) { if (err.message==='登录已过期') return; }
+    }
+
+    function updateStats() {
+      const closed = allTickets.filter(t => [4,5].includes(t.state_id)).length;
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all"><div class="stat-num">${allTickets.length}</div><div class="stat-label">全部工单</div></div>
+        <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${allTickets.length-closed}</div><div class="stat-label">处理中</div></div>
+        <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${closed}</div><div class="stat-label">已完成</div></div>
+      `;
+    }
+
+    function renderTickets() {
+      let tickets = allTickets;
+      if (currentFilter==='open') tickets = allTickets.filter(t => ![4,5].includes(t.state_id));
+      if (currentFilter==='closed') tickets = allTickets.filter(t => [4,5].includes(t.state_id));
+      document.getElementById('ticketList').innerHTML = tickets.length===0
+        ? `<div class="empty"><div style="font-size:48px;margin-bottom:12px;">📋</div><p>${currentFilter==='all'?'暂无工单':currentFilter==='open'?'没有处理中的工单':'没有已完成的工单'}</p></div>`
+        : tickets.map(t => {
+            const [label,cls] = statusMap[t.state_id]||['未知',''];
+            const urge = ![4,5].includes(t.state_id);
+            return `<div class="ticket-card" onclick="openDetail(${t.id})"><div class="ticket-header"><span class="ticket-number">#${t.number||t.id}</span><span class="ticket-status ${cls}">${label}</span></div><div class="ticket-title">${t.title}</div><div class="ticket-meta">${t.group||''}${t.owner&&t.owner!=='-'?' · '+t.owner:''}</div><div class="ticket-time">${new Date(t.created_at).toLocaleString('zh-CN')}</div>${urge?`<button class="urge-btn" onclick="event.stopPropagation();urgeTicket(${t.id},this)">催办</button>`:''}</div>`;
+          }).join('');
+    }
+
+    // 催办（内联调用，阻止冒泡到卡片）
+    async function urgeTicket(ticketId, btn) {
+      btn.disabled = true;
+      btn.textContent = '催办中...';
+      btn.style.color = '#f59e0b';
+      try {
+        const token = getToken();
+        const res = await fetch(`/my-tickets/${ticketId}/urge`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          btn.textContent = '✅ 已催办';
+          btn.style.color = '#059669';
+          btn.style.borderColor = '#a7f3d0';
+          btn.style.background = '#f0fdf4';
+          setTimeout(() => { btn.textContent='催办'; btn.style.color='#ef4444'; btn.style.borderColor='#fecaca'; btn.style.background='#fff'; btn.disabled=false; }, 60000);
+        } else {
+          btn.textContent = '催办';
+          btn.style.color = '#ef4444';
+          btn.style.borderColor = '#fecaca';
+          btn.style.background = '#fff';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        btn.textContent = '催办';
+        btn.style.color = '#ef4444';
+        btn.style.borderColor = '#fecaca';
+        btn.style.background = '#fff';
+        btn.disabled = false;
+      }
+    }
+
+    // 详情弹窗
+    async function openDetail(id) {
+      document.getElementById('modalOverlay').style.display='flex';
+      document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;"><span class="pull-spinner"></span></div>';
+      document.body.style.overflow='hidden';
+      try {
+        const [tRes,aRes] = await Promise.all([apiFetch(`/api/v1/tickets/${id}?expand=true`), apiFetch(`/api/v1/ticket_articles/by_ticket/${id}`)]);
+        const ticket = await tRes.json(); const articles = await aRes.json();
+        const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        let ownerInfo = null;
+        if (ticket.owner_id>1) { try { const oRes=await apiFetch(`/api/v1/users/${ticket.owner_id}`); ownerInfo=await oRes.json(); } catch(e){} }
+        const [label] = statusMap[ticket.state_id]||['未知'];
+        document.getElementById('modalContent').innerHTML = `
+          <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>
+          <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${label}</span></div>
+          <div class="detail-row"><span class="detail-label">分组</span><span class="detail-value">${ticket.group||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">优先级</span><span class="detail-value">${ticket.priority||'-'}</span></div>
+          <div class="detail-row"><span class="detail-label">创建</span><span class="detail-value">${new Date(ticket.created_at).toLocaleString('zh-CN')}</span></div>
+          ${ticket.close_at?`<div class="detail-row"><span class="detail-label">关闭</span><span class="detail-value">${new Date(ticket.close_at).toLocaleString('zh-CN')}</span></div>`:''}
+          <hr class="detail-divider"><div class="section-title">处理人</div>
+          ${ownerInfo?`<div class="handler-card"><div class="handler-avatar">${(ownerInfo.firstname||'?')[0]}</div><div class="handler-info"><div class="handler-name">${ownerInfo.firstname||''} ${ownerInfo.lastname||''}</div><div class="handler-contact">${[ownerInfo.email,ownerInfo.phone,ownerInfo.mobile].filter(Boolean).join(' · ')||'暂无联系方式'}</div></div></div>`:'<div class="handler-card" style="color:#9ca3af;justify-content:center;">暂未分配</div>'}
+          <hr class="detail-divider"><div class="section-title">沟通记录</div>
+          ${list.length===0?'<div style="color:#9ca3af;text-align:center;padding:20px;">暂无回复</div>':list.map(a=>`<div class="article-item"><div class="article-header"><span class="article-author">${a.sender==='Customer'?'我':(a.from||a.created_by||'IT支持')}</span><span class="article-time">${new Date(a.created_at).toLocaleString('zh-CN')}</span></div><div class="article-body">${(a.body||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div>`).join('')}
+          ${[4,5].includes(ticket.state_id) ? '' : `
+          <div class="reply-box">
+            <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:10px;">补充说明</div>
+            <textarea id="replyText" placeholder="输入补充信息..."></textarea>
+            <button onclick="sendReply(${ticket.id})">发送</button>
+            <span id="replyStatus" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+          </div>`}
+        `;
+      } catch (err) { if (err.message==='登录已过期') return; }
+    }
+    async function sendReply(ticketId) {
+      const text = document.getElementById('replyText').value.trim();
+      if (!text) return;
+      const btn = document.querySelector('.reply-box button');
+      const status = document.getElementById('replyStatus');
+      btn.disabled = true; status.textContent = '发送中...';
+      try {
+        await apiFetch('/api/v1/ticket_articles', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: ticketId, subject: '补充说明', body: text, type: 'note', sender: 'Customer', content_type: 'text/plain' })
+        });
+        document.getElementById('replyText').value = '';
+        status.textContent = '已发送';
+        openDetail(ticketId);
+      } catch (e) {
+        if (e.message === '登录已过期') return;
+        status.textContent = '发送失败';
+      } finally { btn.disabled = false; }
+    }
+
+    function closeModal(e) { if (e&&e.target!==document.getElementById('modalOverlay')) return; document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow=''; }
+
+    // 下拉刷新
+    const pullEl = document.getElementById('pullIndicator');
+    let pullStartY=0, pulling=false, refreshing=false;
+    document.addEventListener('touchstart', e => { if (!refreshing&&window.scrollY===0) { pullStartY=e.touches[0].clientY; pulling=true; } }, {passive:true});
+    document.addEventListener('touchmove', e => { if (!pulling||refreshing) return; if (e.touches[0].clientY-pullStartY>40&&window.scrollY===0) { pullEl.className='pull-indicator show'; pullEl.innerHTML='释放立即刷新'; } }, {passive:true});
+    document.addEventListener('touchend', async () => { if (!pulling||refreshing) return; pulling=false; if (pullEl.classList.contains('show')) { refreshing=true; pullEl.innerHTML='<span class="pull-spinner"></span>刷新中...'; await loadTickets(); refreshing=false; pullEl.className='pull-indicator'; } });
+
+    initAuth().then(() => loadTickets());
+  </script>
+</body>
+</html>
