@@ -1,15 +1,14 @@
 {
   "name": "itsm",
   "version": "1.0.0",
-  "description": "",
+  "description": "企业IT服务管理系统 - 工单管理、自动派单、运维协作一站式解决方案",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["itsm", "it-service", "ticket-management", "zammad"],
+  "author": "iostream911",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "dotenv": "^17.4.2",
