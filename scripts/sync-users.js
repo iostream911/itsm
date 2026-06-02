@@ -1,13 +1,35 @@
 // 人员同步脚本 — 从 SSO 接口导入用户到 Zammad
 // 用法: node scripts/sync-users.js
+// 增量: 自动读取 .sync-sequence 文件作为 startSequence，完成后更新
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+const fs = require('fs');
+const path = require('path');
+
 const SSO_URL = 'http://sso.szctdg.com:8080/WLUM/api/sync/user';
-const SSO_PARAMS = '?appName=lzda-new&appKey=fd1939d88d0d4743835731d40ea0705c&startNum=0&orderParam=deptId&pageSize=5000&startSequence=0';
+const SEQ_FILE = path.join(__dirname, '..', '.sync-sequence');
 const ZAMMAD_URL = 'http://localhost:8088';
 const API_TOKEN = process.env.ZAMMAD_TOKEN || '';
-const TEST_LIMIT = 15; // 测试模式：只导 15 条
+const TEST_LIMIT = 15; // 测试模式：只导 15 条，设 0 全量
 const BATCH_DELAY = 200;
+
+// 读取上次同步的序列号
+function loadSequence() {
+  try {
+    const seq = fs.readFileSync(SEQ_FILE, 'utf8').trim();
+    console.log(`[增量] 上次同步序列号: ${seq}`);
+    return seq;
+  } catch (e) {
+    console.log('[增量] 首次全量同步');
+    return '0';
+  }
+}
+
+// 保存本次同步的最新序列号
+function saveSequence(seq) {
+  fs.writeFileSync(SEQ_FILE, String(seq));
+  console.log(`[增量] 保存序列号: ${seq}`);
+}
 
 if (!API_TOKEN) {
   console.error('请在 .env 中设置 ZAMMAD_TOKEN');
@@ -60,9 +82,10 @@ async function findOrCreateOrg(name) {
   return null;
 }
 
-async function fetchUsers() {
-  console.log('[SSO] 获取用户数据...');
-  const res = await fetch(SSO_URL + SSO_PARAMS);
+async function fetchUsers(startSequence) {
+  const url = `${SSO_URL}?appName=lzda-new&appKey=fd1939d88d0d4743835731d40ea0705c&startNum=0&orderParam=deptId&pageSize=5000&startSequence=${startSequence}`;
+  console.log(`[SSO] 获取用户数据 (startSequence=${startSequence})...`);
+  const res = await fetch(url);
   const data = await res.json();
   if (data.code !== 200) {
     console.error('[SSO] 接口异常:', data);
@@ -86,8 +109,12 @@ async function searchZammadUser(account) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function main() {
-  const allUsers = await fetchUsers();
+  const startSequence = loadSequence();
+  const allUsers = await fetchUsers(startSequence);
   console.log(`[SSO] 获取到 ${allUsers.length} 条记录`);
+
+  // 记录最大同步序列号
+  let maxSequence = 0;
 
   // 筛选：syncType=1 + state=1 + 有手机号
   const validUsers = [];
@@ -97,6 +124,10 @@ async function main() {
     const state = sc.state;
     const syncType = u.syncType;
     if (syncType === '1' && state === 1 && mobile) {
+      // 记录最大流水号
+      const seq = Number(u.syncSequence) || 0;
+      if (seq > maxSequence) maxSequence = seq;
+
       validUsers.push({
         account: sc.account,
         name: sc.name,
@@ -188,6 +219,11 @@ async function main() {
 
   console.log(`\n[完成] 新增 ${created} | 更新 ${updated} | 失败 ${failed}`);
   console.log(`[组织] 创建了 ${orgCache.size} 个部门`);
+
+  // 保存本次最大序列号，下次增量同步
+  if (maxSequence > 0) {
+    saveSequence(maxSequence);
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
