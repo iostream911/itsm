@@ -92,8 +92,37 @@ async function getOrCreateZammadCustomer(phone) {
   return newUser.id || null;
 }
 
-// ── 发送验证码 ──
-app.post('/auth/send-code', (req, res) => {
+// ── 短信 API 配置 ──
+const SMS_API_URL = process.env.SMS_API_URL || '';
+const SMS_LOGIN_NAME = process.env.SMS_LOGIN_NAME || '';
+const SMS_PASSWORD = process.env.SMS_PASSWORD || '';
+const SMS_SIGNATURE = process.env.SMS_SIGNATURE || '';
+
+// ── 发送短信验证码 ──
+async function sendSMS(phone, code) {
+  const content = `${SMS_SIGNATURE}您的验证码是：${code}，5分钟内有效。`;
+  const params = new URLSearchParams({
+    LoginName: SMS_LOGIN_NAME,
+    Password: SMS_PASSWORD,
+    Phones: phone,
+    MsgContent: content
+  });
+
+  try {
+    const res = await fetch(SMS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    const text = await res.text();
+    console.log(`[短信] 发送到 ${phone} | 验证码: ${code} | 响应: ${text}`);
+    return { ok: true, raw: text };
+  } catch (err) {
+    console.log(`[短信] 发送失败 ${phone}: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+app.post('/auth/send-code', async (req, res) => {
   const { phone } = req.body;
   if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
     return res.json({ ok: false, error: '请输入正确的手机号' });
@@ -103,8 +132,20 @@ app.post('/auth/send-code', (req, res) => {
   verifyCodes[phone] = { code, expiresAt: Date.now() + 5 * 60 * 1000 };
 
   console.log(`\n  📱 验证码 [${phone}]: ${code}  (5分钟有效)\n`);
-  // 演示模式：验证码直接返回给前端显示
-  res.json({ ok: true, demo_code: code, message: '验证码已发送' });
+
+  // 如果配置了短信 API，则发送真实短信
+  if (SMS_API_URL && SMS_LOGIN_NAME && SMS_PASSWORD) {
+    const result = await sendSMS(phone, code);
+    if (result.ok) {
+      return res.json({ ok: true, message: '验证码已发送' });
+    }
+    // 短信发送失败，删除验证码记录
+    delete verifyCodes[phone];
+    return res.json({ ok: false, error: '短信发送失败，请重试' });
+  }
+
+  // 未配置短信 API 时回退到演示模式
+  res.json({ ok: true, demo_code: code, message: '验证码已发送（演示模式）' });
 });
 
 // ── 判断角色 ──
