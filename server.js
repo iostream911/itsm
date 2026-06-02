@@ -152,6 +152,17 @@ app.post('/auth/send-code', async (req, res) => {
   if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
     return res.json({ ok: false, error: '请输入正确的手机号' });
   }
+
+  // 校验手机号是否在 Zammad 中注册
+  try {
+    const zammadUserId = await findZammadUserId(phone);
+    if (!zammadUserId) {
+      return res.json({ ok: false, error: '该手机号未注册，请联系管理员' });
+    }
+  } catch (e) {
+    return res.json({ ok: false, error: '系统繁忙，请稍后重试' });
+  }
+
   // 生成6位验证码
   const code = String(Math.floor(100000 + Math.random() * 900000));
   verifyCodes[phone] = { code, expiresAt: Date.now() + 5 * 60 * 1000 };
@@ -262,8 +273,6 @@ async function findZammadUserId(phone) {
     // 退而求其次：邮箱匹配
     const emailMatch = list.find(u => u.email === `${phone}@it.local`);
     if (emailMatch) return emailMatch.id;
-    // 再退：任意包含该手机号的活跃用户
-    if (list.length > 0 && list[0].active) return list[0].id;
   }
   return null;
 }
