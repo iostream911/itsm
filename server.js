@@ -100,23 +100,48 @@ const SMS_SIGNATURE = process.env.SMS_SIGNATURE || '';
 
 // ── 发送短信验证码 ──
 async function sendSMS(phone, code) {
-  const content = `${SMS_SIGNATURE}您的验证码是：${code}，5分钟内有效。`;
-  const params = new URLSearchParams({
-    LoginName: SMS_LOGIN_NAME,
-    Password: SMS_PASSWORD,
-    Phones: phone,
-    MsgContent: content
-  });
+  const now = new Date();
+  const dateTime = now.getFullYear().toString() +
+    (now.getMonth() + 1).toString().padStart(2, '0') +
+    now.getDate().toString().padStart(2, '0') +
+    now.getHours().toString().padStart(2, '0') +
+    now.getMinutes().toString().padStart(2, '0') +
+    now.getSeconds().toString().padStart(2, '0');
+
+  const content = `${SMS_SIGNATURE}您的验证码是${code}，5分钟内有效。如非本人操作，请忽略。`;
+
+  const params = new URLSearchParams();
+  params.append('LoginName', SMS_LOGIN_NAME);
+  params.append('Password', SMS_PASSWORD);
+  params.append('Phones', phone);
+  params.append('MsgContent', content);
+  params.append('CorpId', process.env.SMS_CORP_ID || '');
+  params.append('DateTime', dateTime);
+
+  console.log(`[短信] 发送到 ${phone} | 验证码: ${code}`);
 
   try {
-    const res = await fetch(SMS_API_URL, {
+    const res = await fetch(`${SMS_API_URL}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
     });
     const text = await res.text();
-    console.log(`[短信] 发送到 ${phone} | 验证码: ${code} | 响应: ${text}`);
-    return { ok: true, raw: text };
+    console.log(`[短信] 响应: ${text}`);
+
+    // batchNumber 存在表示成功
+    if (text.includes('<batchNumber>') || text.includes('batchNumber')) {
+      return { ok: true };
+    }
+
+    // 解析 <result> 标签
+    const resultMatch = text.match(/<result>([^<]+)<\/result>/);
+    const result = resultMatch?.[1] || '';
+    if (result && result !== 'OK') {
+      return { ok: false, error: `短信发送失败: ${result}` };
+    }
+
+    return { ok: true };
   } catch (err) {
     console.log(`[短信] 发送失败 ${phone}: ${err.message}`);
     return { ok: false, error: err.message };
