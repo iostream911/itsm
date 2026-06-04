@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itsm-config
+  namespace: itsm
+data:
+  ZAMMAD_URL: "http://zammad:8080"
+  TZ: "Asia/Shanghai"

@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: itsm
+  namespace: itsm
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: itsm
+  template:
+    metadata:
+      labels:
+        app: itsm
+    spec:
+      containers:
+      - name: itsm
+        image: itsm:v1.2.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: itsm-config
+        - secretRef:
+            name: itsm-secret
+        env:
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: JWT_SECRET
+        - name: ZAMMAD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: ZAMMAD_TOKEN
+        - name: EMAIL_USER
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: EMAIL_USER
+        - name: EMAIL_PASS
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: EMAIL_PASS
+        - name: SMS_LOGIN_NAME
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: SMS_LOGIN_NAME
+        - name: SMS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: SMS_PASSWORD
+        - name: SMS_SIGNATURE
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: SMS_SIGNATURE
+        - name: SMS_API_URL
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: SMS_API_URL
+        - name: SMS_CORP_ID
+          valueFrom:
+            secretKeyRef:
+              name: itsm-secret
+              key: SMS_CORP_ID
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /login.html
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
