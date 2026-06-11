@@ -1,0 +1,232 @@
+---
+# Zammad Railsserver
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-railsserver
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-railsserver
+  template:
+    metadata:
+      labels:
+        app: zammad-railsserver
+    spec:
+      containers:
+      - name: zammad-railsserver
+        image: ghcr.io/zammad/zammad:7.0.1-0024
+        args: ["zammad-railsserver"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /api/v1/version
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-railsserver
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-railsserver
+  ports:
+  - port: 3000
+    targetPort: 3000
+
+---
+# Zammad Scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-scheduler
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-scheduler
+  template:
+    metadata:
+      labels:
+        app: zammad-scheduler
+    spec:
+      containers:
+      - name: zammad-scheduler
+        image: ghcr.io/zammad/zammad:7.0.1-0024
+        args: ["zammad-scheduler"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+
+---
+# Zammad Websocket
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-websocket
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-websocket
+  template:
+    metadata:
+      labels:
+        app: zammad-websocket
+    spec:
+      containers:
+      - name: zammad-websocket
+        image: ghcr.io/zammad/zammad:7.0.1-0024
+        args: ["zammad-websocket"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        ports:
+        - containerPort: 6042
+        resources:
+          requests:
+            cpu: 20m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        readinessProbe:
+          tcpSocket:
+            port: 6042
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-websocket
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-websocket
+  ports:
+  - port: 6042
+    targetPort: 6042
+
+---
+# Zammad Nginx — exposed as Service "zammad" matching ITSM ConfigMap
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-nginx
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-nginx
+  template:
+    metadata:
+      labels:
+        app: zammad-nginx
+    spec:
+      containers:
+      - name: zammad-nginx
+        image: ghcr.io/zammad/zammad:7.0.1-0024
+        args: ["zammad-nginx"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+# Service name "zammad" matches ITSM ConfigMap ZAMMAD_URL=http://zammad:8080
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-nginx
+  ports:
+  - port: 8080
+    targetPort: 8080

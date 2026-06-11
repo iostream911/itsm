@@ -9,7 +9,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 
 const PORT = 3000;
-const ZAMMAD_URL = 'http://localhost:8088';
+const ZAMMAD_URL = process.env.ZAMMAD_URL || 'http://localhost:8088';
 
 // QQ 邮箱配置（请在环境变量中设置，或直接修改这里）
 const EMAIL_USER = process.env.EMAIL_USER || '';

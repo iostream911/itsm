@@ -1,0 +1,332 @@
+---
+# Shared Zammad ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zammad-config
+  namespace: itsm
+data:
+  POSTGRESQL_HOST: zammad-postgresql
+  POSTGRESQL_DB: zammad_production
+  POSTGRESQL_USER: zammad
+  POSTGRESQL_PASS: zammad
+  REDIS_URL: redis://zammad-redis:6379
+  MEMCACHE_SERVERS: zammad-memcached:11211
+  ELASTICSEARCH_ENABLED: "true"
+  ELASTICSEARCH_SCHEMA: http
+  ELASTICSEARCH_HOST: zammad-elasticsearch
+  ELASTICSEARCH_PORT: "9200"
+  NGINX_PORT: "8080"
+  TZ: Asia/Shanghai
+---
+# PersistentVolumeClaims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zammad-postgresql-pvc
+  namespace: itsm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zammad-redis-pvc
+  namespace: itsm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zammad-elasticsearch-pvc
+  namespace: itsm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zammad-storage-pvc
+  namespace: itsm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zammad-backup-pvc
+  namespace: itsm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-postgresql
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-postgresql
+  template:
+    metadata:
+      labels:
+        app: zammad-postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:17.9-alpine
+        env:
+        - name: POSTGRES_DB
+          value: zammad_production
+        - name: POSTGRES_USER
+          value: zammad
+        - name: POSTGRES_PASSWORD
+          value: zammad
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: zammad-postgresql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-postgresql
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# Redis
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-redis
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-redis
+  template:
+    metadata:
+      labels:
+        app: zammad-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:8.6.2-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: zammad-redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-redis
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+# Elasticsearch
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-elasticsearch
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: zammad-elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: elasticsearch:9.3.3
+        env:
+        - name: discovery.type
+          value: single-node
+        - name: xpack.security.enabled
+          value: "false"
+        - name: ES_JAVA_OPTS
+          value: -Xms1g -Xmx1g
+        ports:
+        - containerPort: 9200
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1536Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health?local=true
+            port: 9200
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/elasticsearch/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: zammad-elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-elasticsearch
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-elasticsearch
+  ports:
+  - port: 9200
+    targetPort: 9200
+---
+# Memcached
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-memcached
+  namespace: itsm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-memcached
+  template:
+    metadata:
+      labels:
+        app: zammad-memcached
+    spec:
+      containers:
+      - name: memcached
+        image: memcached:1.6.41-alpine
+        command: ["memcached", "-m", "256M"]
+        ports:
+        - containerPort: 11211
+        resources:
+          requests:
+            cpu: 20m
+            memory: 280Mi
+          limits:
+            cpu: 200m
+            memory: 384Mi
+        readinessProbe:
+          tcpSocket:
+            port: 11211
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-memcached
+  namespace: itsm
+spec:
+  selector:
+    app: zammad-memcached
+  ports:
+  - port: 11211
+    targetPort: 11211
+---
+# Zammad Init Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zammad-init
+  namespace: itsm
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: zammad-init
+        image: ghcr.io/zammad/zammad:7.0.1-0024
+        args: ["zammad-init"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
