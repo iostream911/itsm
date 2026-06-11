@@ -28,10 +28,10 @@ spec:
         resources:
           requests:
             cpu: 100m
-            memory: 512Mi
+            memory: 384Mi
           limits:
             cpu: 500m
-            memory: 1Gi
+            memory: 768Mi
         readinessProbe:
           tcpSocket:
             port: 3000
@@ -175,53 +175,22 @@ spec:
     targetPort: 6042
 
 ---
-# Zammad Nginx — exposed as Service "zammad" matching ITSM ConfigMap
-apiVersion: apps/v1
-kind: Deployment
+# Zammad Railsserver NodePort for external UI access
+apiVersion: v1
+kind: Service
 metadata:
-  name: zammad-nginx
+  name: zammad-ui
   namespace: itsm
 spec:
-  replicas: 1
+  type: NodePort
   selector:
-    matchLabels:
-      app: zammad-nginx
-  template:
-    metadata:
-      labels:
-        app: zammad-nginx
-    spec:
-      containers:
-      - name: zammad-nginx
-        image: ghcr.io/zammad/zammad:7.0.1-0024
-        args: ["zammad-nginx"]
-        envFrom:
-        - configMapRef:
-            name: zammad-config
-        ports:
-        - containerPort: 8080
-        resources:
-          requests:
-            cpu: 50m
-            memory: 256Mi
-          limits:
-            cpu: 200m
-            memory: 512Mi
-        readinessProbe:
-          tcpSocket:
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 15
-          failureThreshold: 5
-      volumes:
-      - name: storage
-        persistentVolumeClaim:
-          claimName: zammad-storage-pvc
-      - name: backup
-        persistentVolumeClaim:
-          claimName: zammad-backup-pvc
+    app: zammad-railsserver
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30082
 ---
-# Service "zammad" routes directly to railsserver (bypasses nginx DNS issues)
+# Service "zammad" routes directly to railsserver
 apiVersion: v1
 kind: Service
 metadata:
