@@ -18,6 +18,11 @@ data:
   ELASTICSEARCH_PORT: "9200"
   NGINX_PORT: "8080"
   TZ: Asia/Shanghai
+  ZAMMAD_RAILSSERVER_PORT: "3000"
+  ZAMMAD_WEBSOCKET_PORT: "6042"
+  NGINX_PORT: "8080"
+  TZ: Asia/Shanghai
+  ZAMMAD_HTTP_TYPE: "IPv4"
 ---
 # PersistentVolumeClaims
 apiVersion: v1

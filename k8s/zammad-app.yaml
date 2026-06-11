@@ -18,7 +18,8 @@ spec:
       containers:
       - name: zammad-railsserver
         image: ghcr.io/zammad/zammad:7.0.1-0024
-        args: ["zammad-railsserver"]
+        command: ["/bin/bash", "-c"]
+        args: ["ZAMMAD_RAILSSERVER_PORT=3000 exec /docker-entrypoint.sh zammad-railsserver"]
         envFrom:
         - configMapRef:
             name: zammad-config
@@ -32,11 +33,11 @@ spec:
             cpu: 500m
             memory: 1Gi
         readinessProbe:
-          httpGet:
-            path: /api/v1/version
+          tcpSocket:
             port: 3000
-          initialDelaySeconds: 15
-          periodSeconds: 10
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          failureThreshold: 5
         volumeMounts:
         - name: storage
           mountPath: /opt/zammad/storage
@@ -144,8 +145,9 @@ spec:
         readinessProbe:
           tcpSocket:
             port: 6042
-          initialDelaySeconds: 10
-          periodSeconds: 10
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 5
         volumeMounts:
         - name: storage
           mountPath: /opt/zammad/storage
@@ -200,16 +202,17 @@ spec:
         - containerPort: 8080
         resources:
           requests:
-            cpu: 20m
-            memory: 64Mi
+            cpu: 50m
+            memory: 256Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 200m
+            memory: 512Mi
         readinessProbe:
           tcpSocket:
             port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 5
       volumes:
       - name: storage
         persistentVolumeClaim:
