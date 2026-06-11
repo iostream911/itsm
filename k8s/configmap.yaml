@@ -4,5 +4,5 @@ metadata:
   name: itsm-config
   namespace: itsm
 data:
-  ZAMMAD_URL: "http://zammad:8080"
+  ZAMMAD_URL: "http://zammad-railsserver:3000"
   TZ: "Asia/Shanghai"

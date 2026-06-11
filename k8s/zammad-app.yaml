@@ -221,7 +221,7 @@ spec:
         persistentVolumeClaim:
           claimName: zammad-backup-pvc
 ---
-# Service name "zammad" matches ITSM ConfigMap ZAMMAD_URL=http://zammad:8080
+# Service "zammad" routes directly to railsserver (bypasses nginx DNS issues)
 apiVersion: v1
 kind: Service
 metadata:
@@ -229,7 +229,7 @@ metadata:
   namespace: itsm
 spec:
   selector:
-    app: zammad-nginx
+    app: zammad-railsserver
   ports:
   - port: 8080
-    targetPort: 8080
+    targetPort: 3000
