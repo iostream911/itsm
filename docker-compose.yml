@@ -30,14 +30,6 @@ x-shared:
       # Allow passing in these variables via .env:
       AUTOWIZARD_JSON:
       AUTOWIZARD_RELATIVE_PATH:
-      ELASTICSEARCH_ENABLED:
-      ELASTICSEARCH_SCHEMA:
-      ELASTICSEARCH_HOST:
-      ELASTICSEARCH_PORT:
-      ELASTICSEARCH_USER:
-      ELASTICSEARCH_PASS:
-      ELASTICSEARCH_NAMESPACE:
-      ELASTICSEARCH_REINDEX:
       NGINX_PORT:
       NGINX_CLIENT_MAX_BODY_SIZE:
       NGINX_SERVER_NAME:
@@ -87,16 +79,6 @@ services:
       - zammad-backup:/var/tmp/zammad
       - zammad-storage:/opt/zammad/storage
     user: 0:0
-
-  zammad-elasticsearch:
-    image: elasticsearch:${ELASTICSEARCH_VERSION:-9.3.3}
-    restart: ${RESTART:-always}
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    environment:
-      discovery.type: single-node
-      xpack.security.enabled: 'false'
-      ES_JAVA_OPTS: ${ELASTICSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
 
   zammad-init:
     <<: *zammad-service
@@ -150,8 +132,6 @@ services:
     command: ["zammad-websocket"]
 
 volumes:
-  elasticsearch-data:
-    driver: local
   postgresql-data:
     driver: local
   redis-data:
