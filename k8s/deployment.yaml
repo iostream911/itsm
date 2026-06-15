@@ -13,10 +13,12 @@ spec:
       labels:
         app: itsm
     spec:
+      imagePullSecrets:
+      - name: harbor-registry
       containers:
       - name: itsm
-        image: itsm:v1.2.2
-        imagePullPolicy: IfNotPresent
+        image: harbor.szctdg.tech/itsm/itsm:v1.2.2
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
         envFrom:
