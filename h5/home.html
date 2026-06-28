@@ -98,8 +98,9 @@
       if (!msg) return;
       input.value = '';
       var body = document.getElementById('chatBody');
-      body.innerHTML += '<div class="chat-msg user"><div class="chat-bubble">'+msg.replace(/</g,'&lt;')+'</div></div>';
-      body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="typing"><span></span><span></span><span></span></div></div>';
+      body.insertAdjacentHTML('beforeend', '<div class="chat-msg user"><div class="chat-bubble">'+msg.replace(/</g,'&lt;')+'</div></div>');
+      var typingEl = document.createElement('div'); typingEl.className = 'chat-msg assistant'; typingEl.innerHTML = '<div class="avatar">🤖</div><div class="typing"><span></span><span></span><span></span></div>';
+      body.appendChild(typingEl);
       body.scrollTop = body.scrollHeight;
       chatHistory.push({ role: 'user', content: msg });
       if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
@@ -109,29 +110,34 @@
           body: JSON.stringify({ message: msg, history: chatHistory.slice(0, -1) })
         });
         var data = await res.json();
-        body.removeChild(body.lastChild);
+        if (typingEl.parentNode) typingEl.remove();
         if (data.type === 'ticket') {
           var t = data.title||'工单申请', g = data.group||'桌面运维', d = data.description||'';
           t = t.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
           d = d.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">已为您生成工单，请确认信息：<div class="ticket-confirm" id="confirmCard"><input id="cfTitle" value="'+t+'"><select id="cfGroup"><option'+(g==='桌面运维'?' selected':'')+'>桌面运维</option><option'+(g==='网络运维'?' selected':'')+'>网络运维</option><option'+(g==='应用系统运维'?' selected':'')+'>应用系统运维</option></select><textarea id="cfDesc" rows="2">'+d+'</textarea><button class="btn-create" onclick="createTicket()">确认提交</button><button class="btn-cancel" onclick="cancelTicket()">取消</button></div></div></div>';
+          body.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">已为您生成工单，请确认信息：<div class="ticket-confirm" id="confirmCard"><input id="cfTitle" value="'+t+'"><select id="cfGroup"><option'+(g==='桌面运维'?' selected':'')+'>桌面运维</option><option'+(g==='网络运维'?' selected':'')+'>网络运维</option><option'+(g==='应用系统运维'?' selected':'')+'>应用系统运维</option></select><textarea id="cfDesc" rows="2">'+d+'</textarea><button class="btn-create" onclick="createTicket()">确认提交</button><button class="btn-cancel" onclick="cancelTicket()">取消</button></div></div></div>');
         } else {
-          body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">'+(data.content||'抱歉，请换个方式描述您的问题。')+'</div></div>';
+          body.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">'+(data.content||'抱歉，请换个方式描述您的问题。')+'</div></div>');
         }
       } catch(e) {
-        body.removeChild(body.lastChild);
-        body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">抱歉，服务暂时不可用，请稍后重试。</div></div>';
+        if (typingEl.parentNode) typingEl.remove();
+        body.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">抱歉，服务暂时不可用，请稍后重试。</div></div>');
       }
       body.scrollTop = body.scrollHeight;
     }
 
     async function createTicket() {
       var card = document.getElementById('confirmCard');
+      if (!card) return;
       card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
+      var titleEl = document.getElementById('cfTitle');
+      var groupEl = document.getElementById('cfGroup');
+      var descEl = document.getElementById('cfDesc');
+      if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
-          body: JSON.stringify({ title: document.getElementById('cfTitle').value, group: document.getElementById('cfGroup').value, body: document.getElementById('cfDesc').value })
+          body: JSON.stringify({ title: titleEl.value, group: groupEl.value, body: descEl.value })
         });
         if (res.ok) { location.href = 'list.html'; }
         else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }

@@ -141,9 +141,17 @@
     async function loadDashboard(reset) {
       document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
       try {
-        const res = await fetch(`${API}/tickets?limit=2000`, { headers: {} });
-        const data = await res.json();
-        allTicketsCache = Array.isArray(data) ? data : [];
+        // 分页循环取全部工单
+        var all = [], page = 1;
+        while (true) {
+          const res = await fetch(`${API}/tickets?page=${page}&per_page=100`, { headers: {} });
+          const data = await res.json();
+          if (!Array.isArray(data) || data.length === 0) break;
+          all = all.concat(data);
+          if (data.length < 100) break;
+          page++;
+        }
+        allTicketsCache = all;
         now = Date.now();
         renderList();
         document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
