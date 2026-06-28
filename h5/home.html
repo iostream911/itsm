@@ -129,15 +129,16 @@
     async function createTicket() {
       var card = document.getElementById('confirmCard');
       if (!card) return;
-      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
       var titleEl = document.getElementById('cfTitle');
       var groupEl = document.getElementById('cfGroup');
       var descEl = document.getElementById('cfDesc');
       if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
+      var title = titleEl.value, group = groupEl.value, desc = descEl.value;
+      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
-          body: JSON.stringify({ title: titleEl.value, group: groupEl.value, body: descEl.value })
+          body: JSON.stringify({ title: title, group: group, body: desc })
         });
         if (res.ok) { location.href = 'list.html'; }
         else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }
@@ -157,7 +158,7 @@
         document.getElementById('welcomeText').innerHTML = '<span>'+(data.name||'用户')+'</span>，有什么可以帮您？';
         document.getElementById('bottomNav').innerHTML = buildNav(data.role);
         fetch('/my-tickets', { headers: { 'Authorization': 'Bearer '+token } }).then(function(r) { return r.json(); }).then(function(d) {
-          if (Array.isArray(d)) document.getElementById('ticketCount').textContent = d.length;
+          document.getElementById('ticketCount').textContent = d.total || (Array.isArray(d) ? d.length : 0);
         }).catch(function(){});
       } catch(e) { logout(); }
     }

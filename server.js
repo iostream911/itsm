@@ -97,6 +97,22 @@ app.get('/api/v1/tickets-stats', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// 管理看板工单列表（按创建时间倒序，新工单在前）
+app.get('/api/v1/tickets-sorted', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.per_page) || 15;
+    const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Token token=${API_TOKEN}` },
+      body: JSON.stringify({ limit: perPage, offset: (page - 1) * perPage, sort_by: 'created_at', order_by: 'desc', expand: true })
+    });
+    const data = await resp.json();
+    const records = data.records || (Array.isArray(data) ? data : []);
+    res.json(records);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── 内存用户存储（生产环境换成数据库）──
 const users = {};           // phone -> { phone, name, zammadId, createdAt }
 const verifyCodes = {};     // phone -> { code, expiresAt }
@@ -433,9 +449,9 @@ app.get('/my-tickets', authMiddleware, async (req, res) => {
     const phone = req.user.phone;
     const customerId = await findZammadUserId(phone);
 
-    if (!customerId) return res.json([]);
+    if (!customerId) return res.json({ tickets: [], total: 0 });
 
-    const { records } = await searchTickets({
+    const { records, total_count } = await searchTickets({
       'ticket.customer_id': { operator: 'is', value: customerId }
     }, 50);
     records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -452,13 +468,58 @@ app.get('/my-tickets', authMiddleware, async (req, res) => {
       } catch(e) {}
     }));
 
-    res.json(records.map(t => ({
-      ...t,
-      customer_name: t.customer || '-',
-      customer_phone: phone,
-      owner_name: (userMap[t.owner_id] || {}).name || t.owner || '-',
-      owner_phone: (userMap[t.owner_id] || {}).phone || '-'
-    })));
+    res.json({
+      tickets: records.map(t => ({
+        ...t,
+        customer_name: t.customer || '-',
+        customer_phone: phone,
+        owner_name: (userMap[t.owner_id] || {}).name || t.owner || '-',
+        owner_phone: (userMap[t.owner_id] || {}).phone || '-'
+      })),
+      total: total_count
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 运维人员看板（只看分配给自己的工单）──
+app.get('/my-dashboard', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role === 'customer') {
+      return res.status(403).json({ error: '权限不足' });
+    }
+    const phone = req.user.phone;
+    const userId = await findZammadUserId(phone);
+    if (!userId) return res.json({ tickets: [], total: 0 });
+
+    const { records, total_count } = await searchTickets({
+      'ticket.owner_id': { operator: 'is', value: userId }
+    }, 100);
+    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const customerIds = [...new Set(records.map(t => t.customer_id).filter(Boolean))];
+    const userMap = {};
+    await Promise.all(customerIds.map(async (id) => {
+      try {
+        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
+          headers: { 'Authorization': `Token token=${API_TOKEN}` }
+        });
+        const u = await r.json();
+        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
+      } catch(e) {}
+    }));
+
+    res.json({
+      tickets: records.map(t => ({
+        ...t,
+        customer_name: (userMap[t.customer_id] || {}).name || t.customer || '-',
+        customer_phone: (userMap[t.customer_id] || {}).phone || '-',
+        owner_name: t.owner || '-',
+        owner_phone: (userMap[userId] || {}).phone || '-'
+      })),
+      total: total_count
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -544,66 +605,56 @@ async function sendAssignmentEmail(ticket, agentEmail, agentName) {
 // ── 自动派单：按分组找负载最低的处理人 ──
 async function autoAssign(ticketId, groupName) {
   try {
-    // 1. 获取分组 ID
-    const groupRes = await fetch(`${ZAMMAD_URL}/api/v1/groups`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
+    const headers = { 'Authorization': `Token token=${API_TOKEN}` };
+
+    // 1. 获取分组及其成员
+    const groupRes = await fetch(`${ZAMMAD_URL}/api/v1/groups`, { headers });
     const groups = await groupRes.json();
     const group = (Array.isArray(groups) ? groups : []).find(g => g.name === groupName);
-    if (!group) return console.log(`[派单] 找不到分组: ${groupName}`);
+    if (!group) return console.log('[派单] 找不到分组: ' + groupName);
 
-    // 2. 获取该分组的处理人（用fetchAll取全部，limit=100漏人）
-    const allUsers = await fetchAll(`${ZAMMAD_URL}/api/v1/users?expand=true`);
-    const agents = allUsers
-      .filter(u => (u.role_ids || []).includes(2)) // 只取 Agent 角色
-      .filter(u => {
-        const gids = u.group_ids || {};
-        return Object.keys(gids).some(gid => gids[gid] && groups.find(g => g.id == gid && g.name === groupName));
-      })
-      .filter(u => u.id !== 3); // 排除管理员，不参与自动派单
+    const memberIds = (group.user_ids || []).filter(id => id !== 3); // 排除测试用户
 
-    if (agents.length === 0) return console.log(`[派单] 分组 ${groupName} 暂无处理人`);
+    // 2. 获取这些用户的角色和 VIP 状态
+    const agentPromises = memberIds.map(id =>
+      fetch(`${ZAMMAD_URL}/api/v1/users/${id}?expand=true`, { headers }).then(r => r.json()).catch(() => null)
+    );
+    const users = (await Promise.all(agentPromises)).filter(u => u && u.id);
+    const agents = users.filter(u => (u.role_ids || []).includes(2));
+    if (agents.length === 0) return console.log('[派单] 分组 ' + groupName + ' 无 agent');
 
-    // 3. VIP 优先：如果该组有 VIP 运维人员，则只看 VIP
+    // 3. VIP 优先
     const vipAgents = agents.filter(a => a.vip === true);
     const candidates = vipAgents.length > 0 ? vipAgents : agents;
-    const vipLabel = vipAgents.length > 0 ? ' [VIP优先]' : '';
 
-    // 4. 找负载最低的（拥有最少 open 工单的处理人）
-    const ticketsRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets?expand=true`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
-    const allTickets = await ticketsRes.json();
-    const ticketList = Array.isArray(allTickets) ? allTickets : [];
-
-    let bestAgent = candidates[0];
-    let minLoad = Infinity;
+    // 4. 找负载最低的（查每个候选人的 open 工单数）
+    let bestAgent = candidates[0], minLoad = Infinity;
     for (const agent of candidates) {
-      const load = ticketList.filter(t => t.owner_id === agent.id && ![4,5].includes(t.state_id)).length;
+      const r = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition: { 'ticket.owner_id': { operator: 'is', value: agent.id }, 'ticket.state_id': { operator: 'is not', value: [4, 5] } }, only_total_count: true })
+      });
+      const data = await r.json().catch(() => ({}));
+      const load = data.total_count || 0;
       if (load < minLoad) { minLoad = load; bestAgent = agent; }
     }
 
-    // 4. 分配工单
+    // 5. 分配工单
     await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token token=${API_TOKEN}`
-      },
-      body: JSON.stringify({ owner_id: bestAgent.id, state_id: 2 }) // 分配后自动改为"已打开"状态
+      method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner_id: bestAgent.id, state_id: 2 })
     });
-    console.log(`[派单] 工单 #${ticketId} → ${bestAgent.firstname}${bestAgent.lastname || ''} (${bestAgent.email}) (负载: ${minLoad})${vipLabel}`);
+    const label = vipAgents.length > 0 ? ' [VIP]' : '';
+    console.log('[派单] #' + ticketId + ' -> ' + (bestAgent.firstname || '') + (bestAgent.lastname || '') + ' (' + bestAgent.email + ') load=' + minLoad + label);
 
-    // 5. 发送邮件通知
-    const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
+    // 6. 邮件通知
+    const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, { headers });
     const ticket = await ticketRes.json();
-    await sendAssignmentEmail(ticket, bestAgent.email, `${bestAgent.firstname}${bestAgent.lastname || ''}`);
+    await sendAssignmentEmail(ticket, bestAgent.email, (bestAgent.firstname || '') + (bestAgent.lastname || ''));
 
     return bestAgent;
   } catch (err) {
-    console.log(`[派单] 错误: ${err.message}`);
+    console.log('[派单] 错误: ' + err.message);
     return null;
   }
 }
@@ -753,45 +804,6 @@ app.put('/api/v1/users/:id', async (req, res) => {
     });
     const data = await userRes.json();
     res.status(userRes.status).json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── 运维人员看板（只看分配给自己的工单）──
-app.get('/my-dashboard', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role === 'customer') {
-      return res.status(403).json({ error: '权限不足' });
-    }
-    const phone = req.user.phone;
-    const userId = await findZammadUserId(phone);
-    if (!userId) return res.json([]);
-
-    const { records } = await searchTickets({
-      'ticket.owner_id': { operator: 'is', value: userId }
-    }, 50);
-    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    const customerIds = [...new Set(records.map(t => t.customer_id).filter(Boolean))];
-    const userMap = {};
-    await Promise.all(customerIds.map(async (id) => {
-      try {
-        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
-          headers: { 'Authorization': `Token token=${API_TOKEN}` }
-        });
-        const u = await r.json();
-        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
-      } catch(e) {}
-    }));
-
-    res.json(records.map(t => ({
-      ...t,
-      customer_name: (userMap[t.customer_id] || {}).name || t.customer || '-',
-      customer_phone: (userMap[t.customer_id] || {}).phone || '-',
-      owner_name: t.owner || '-',
-      owner_phone: (userMap[userId] || {}).phone || '-'
-    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

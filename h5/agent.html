@@ -129,11 +129,14 @@
       renderList(); updateStats();
     });
 
+    let totalTickets = 0;
+
     async function loadDashboard() {
       try {
         const res = await apiFetch('/my-dashboard');
         const data = await res.json();
-        allTickets = Array.isArray(data) ? data : [];
+        if (data.tickets) { allTickets = data.tickets; totalTickets = data.total; }
+        else { allTickets = Array.isArray(data) ? data : []; totalTickets = allTickets.length; }
         now = Date.now();
         renderList(); updateStats();
       } catch (e) { if (e.message==='登录已过期') return; }
@@ -147,7 +150,7 @@
         <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${openC}</div><div class="stat-label">待处理</div></div>
         <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${closedC}</div><div class="stat-label">已完成</div></div>
         <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${overdueC}</div><div class="stat-label">超时</div></div>
-        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all"><div class="stat-num">${allTickets.length}</div><div class="stat-label">总计</div></div>
+        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all"><div class="stat-num">${totalTickets}</div><div class="stat-label">总计</div></div>
       `;
     }
 
