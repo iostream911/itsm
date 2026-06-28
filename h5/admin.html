@@ -141,15 +141,15 @@
     async function loadDashboard(reset) {
       document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
       try {
-        // 分页循环取全部工单
-        var all = [], page = 1;
-        while (true) {
-          const res = await fetch(`${API}/tickets?page=${page}&per_page=100`, { headers: {} });
-          const data = await res.json();
-          if (!Array.isArray(data) || data.length === 0) break;
-          all = all.concat(data);
-          if (data.length < 100) break;
-          page++;
+        // 循环取全部工单（每页100，最多10页）
+        var all = [], pg = 1;
+        while (pg <= 10) {
+          var r = await fetch(`${API}/tickets?page=${pg}&per_page=100`, { headers: {} });
+          var d = await r.json();
+          if (!Array.isArray(d) || d.length === 0) break;
+          all = all.concat(d);
+          if (d.length < 100) break;
+          pg++;
         }
         allTicketsCache = all;
         now = Date.now();

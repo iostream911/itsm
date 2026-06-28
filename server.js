@@ -13,12 +13,11 @@ const ZAMMAD_URL = process.env.ZAMMAD_URL || 'http://localhost:8088';
 
 // 分页获取全部数据（Zammad API 每页最多100条）
 async function fetchAll(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  const headers = { 'Authorization': `Token token=${API_TOKEN}` };
   let page = 1, all = [];
-  while (true) {
-    const sep = url.includes('?') ? '&' : '?';
-    const resp = await fetch(`${url}${sep}page=${page}&per_page=100`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
+  while (page <= 10) {
+    const resp = await fetch(`${url}${sep}page=${page}&per_page=100`, { headers });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) break;
     all = all.concat(data);
