@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>IT 服务中心</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 80px; }
+    .header { background: #1e40af; color: #fff; padding: 14px 20px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+    .welcome { font-size: 15px; color: #374151; margin-bottom: 16px; text-align: center; }
+    .welcome span { font-weight: 600; color: #1e40af; }
+    .chat-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; overflow: hidden; }
+    .chat-header { background: #eff6ff; padding: 12px 16px; font-size: 15px; font-weight: 600; color: #1e40af; border-bottom: 1px solid #dbeafe; }
+    .chat-body { padding: 12px; max-height: 380px; overflow-y: auto; min-height: 60px; }
+    .chat-msg { margin-bottom: 12px; display: flex; gap: 8px; }
+    .chat-msg.user { flex-direction: row-reverse; }
+    .chat-bubble { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .chat-msg.assistant .chat-bubble { background: #f0f9ff; border: 1px solid #bae6fd; color: #0c4a6e; }
+    .chat-msg.user .chat-bubble { background: #2563eb; color: #fff; }
+    .chat-msg .avatar { width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .chat-msg.assistant .avatar { background: #dbeafe; }
+    .ticket-confirm { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .ticket-confirm input, .ticket-confirm select, .ticket-confirm textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; margin-bottom: 6px; background: #fff; }
+    .ticket-confirm button { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; }
+    .btn-create { background: #2563eb; color: #fff; margin-right: 8px; }
+    .btn-cancel { background: #f3f4f6; color: #374151; }
+    .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #e5e7eb; }
+    .chat-input input { flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 20px; font-size: 14px; outline: none; background: #f9fafb; }
+    .chat-input input:focus { border-color: #2563eb; }
+    .chat-input button { padding: 10px 18px; background: #2563eb; color: #fff; border: none; border-radius: 20px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+    .shortcuts { display: flex; gap: 8px; margin-bottom: 16px; }
+    .shortcut { flex: 1; background: #fff; border-radius: 10px; padding: 14px 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; text-decoration: none; color: #111827; transition: all 0.15s; }
+    .shortcut:active { transform: scale(0.97); }
+    .shortcut-icon { font-size: 22px; margin-bottom: 4px; }
+    .shortcut-label { font-size: 12px; font-weight: 500; }
+    .shortcut-badge { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb; display: flex; z-index: 50; padding: 4px 0 env(safe-area-inset-bottom,6px); overflow-x: auto; }
+    .nav-item { flex: 1; min-width: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 2px; color: #9ca3af; text-decoration: none; font-size: 9px; cursor: pointer; border: none; background: none; }
+    .nav-item .icon { font-size: 18px; line-height: 1; margin-bottom: 1px; }
+    .nav-item.active { color: #2563eb; }
+    .typing { display: flex; gap: 4px; padding: 10px 14px; }
+    .typing span { width: 6px; height: 6px; background: #93c5fd; border-radius: 50%; animation: bounce 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: 0.2s; } .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+  </style>
+</head>
+<body>
+  <div class="header">IT 服务中心<button class="logout-btn" onclick="logout()">退出登录</button></div>
+  <div class="container">
+    <div class="welcome" id="welcomeText">加载中...</div>
+    <div class="shortcuts">
+      <a class="shortcut" href="list.html"><div class="shortcut-icon">📋</div><div class="shortcut-label">我的工单</div><div class="shortcut-badge" id="ticketCount">-</div></a>
+      <a class="shortcut" href="submit.html"><div class="shortcut-icon">🔧</div><div class="shortcut-label">快速提单</div></a>
+      <div class="shortcut" onclick="showPwdComing()"><div class="shortcut-icon">🔑</div><div class="shortcut-label">自助改密</div><div class="shortcut-badge">敬请期待</div></div>
+    </div>
+    <div class="chat-card">
+      <div class="chat-header">💬 AI 智能客服</div>
+      <div class="chat-body" id="chatBody">
+        <div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">您好！我是IT服务助手，可以帮您解答问题或创建工单。请描述您遇到的问题。</div></div>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="描述您遇到的问题..." onkeydown="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()">发送</button>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-bar" id="bottomNav"></nav>
+
+  <script>
+    const PAGE = 'home';
+    function getToken() { return localStorage.getItem('it_token'); }
+    function getRole()  { return localStorage.getItem('it_role') || 'customer'; }
+    function logout()   { localStorage.clear(); location.href='login.html'; }
+
+    function buildNav(role) {
+      var items = [
+        { id:'home', icon:'🏠', label:'首页', href:'home.html', roles:['admin','agent','customer'] },
+        { id:'list', icon:'📋', label:'工单', href:'list.html', roles:['admin','agent','customer'] },
+        { id:'submit', icon:'✍️', label:'提单', href:'submit.html', roles:['admin','agent','customer'] },
+        { id:'agent', icon:'📊', label:'看板', href:'agent.html', roles:['admin','agent'] },
+        { id:'admin', icon:'🖥️', label:'管理', href:'admin.html', roles:['admin'] },
+        { id:'users', icon:'👥', label:'用户', href:'users.html', roles:['admin'] }
+      ];
+      return items.filter(function(i) { return i.roles.indexOf(role) >= 0; }).map(function(i) {
+        return '<a class="nav-item'+(PAGE===i.id?' active':'')+'" href="'+i.href+'"><span class="icon">'+i.icon+'</span>'+i.label+'</a>';
+      }).join('');
+    }
+
+    function showPwdComing() { alert('自助改密功能即将上线。如需修改密码，请联系IT部门。'); }
+  var chatHistory = [];
+
+    async function sendMessage() {
+      var input = document.getElementById('chatInput');
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      var body = document.getElementById('chatBody');
+      body.innerHTML += '<div class="chat-msg user"><div class="chat-bubble">'+msg.replace(/</g,'&lt;')+'</div></div>';
+      body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="typing"><span></span><span></span><span></span></div></div>';
+      body.scrollTop = body.scrollHeight;
+      chatHistory.push({ role: 'user', content: msg });
+      if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+      try {
+        var res = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
+          body: JSON.stringify({ message: msg, history: chatHistory.slice(0, -1) })
+        });
+        var data = await res.json();
+        body.removeChild(body.lastChild);
+        if (data.type === 'ticket') {
+          var t = data.title||'工单申请', g = data.group||'桌面运维', d = data.description||'';
+          t = t.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          d = d.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">已为您生成工单，请确认信息：<div class="ticket-confirm" id="confirmCard"><input id="cfTitle" value="'+t+'"><select id="cfGroup"><option'+(g==='桌面运维'?' selected':'')+'>桌面运维</option><option'+(g==='网络运维'?' selected':'')+'>网络运维</option><option'+(g==='应用系统运维'?' selected':'')+'>应用系统运维</option></select><textarea id="cfDesc" rows="2">'+d+'</textarea><button class="btn-create" onclick="createTicket()">确认提交</button><button class="btn-cancel" onclick="cancelTicket()">取消</button></div></div></div>';
+        } else {
+          body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">'+(data.content||'抱歉，请换个方式描述您的问题。')+'</div></div>';
+        }
+      } catch(e) {
+        body.removeChild(body.lastChild);
+        body.innerHTML += '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">抱歉，服务暂时不可用，请稍后重试。</div></div>';
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+
+    async function createTicket() {
+      var card = document.getElementById('confirmCard');
+      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
+      try {
+        var res = await fetch('/my-tickets', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
+          body: JSON.stringify({ title: document.getElementById('cfTitle').value, group: document.getElementById('cfGroup').value, body: document.getElementById('cfDesc').value })
+        });
+        if (res.ok) { location.href = 'list.html'; }
+        else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }
+      } catch(e) { card.innerHTML = '<div style="color:#ef4444;">网络错误: '+e.message+'</div>'; }
+    }
+
+    function cancelTicket() { document.getElementById('confirmCard').innerHTML = '<div style="color:#9ca3af;">已取消</div>'; }
+
+    async function init() {
+      var token = getToken();
+      if (!token) { location.href = 'login.html'; return; }
+      try {
+        var res = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer '+token } });
+        if (!res.ok) throw new Error('auth');
+        var data = await res.json();
+        localStorage.setItem('it_role', data.role);
+        document.getElementById('welcomeText').innerHTML = '<span>'+(data.name||'用户')+'</span>，有什么可以帮您？';
+        document.getElementById('bottomNav').innerHTML = buildNav(data.role);
+        fetch('/my-tickets', { headers: { 'Authorization': 'Bearer '+token } }).then(function(r) { return r.json(); }).then(function(d) {
+          if (Array.isArray(d)) document.getElementById('ticketCount').textContent = d.length;
+        }).catch(function(){});
+      } catch(e) { logout(); }
+    }
+
+    init();
+  </script>
+</body>
+</html>

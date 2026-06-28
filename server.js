@@ -65,8 +65,8 @@ app.get('/api/v1/tickets-stats', async (req, res) => {
     const openTickets = list.filter(t => ![4,5].includes(t.state_id));
     const now = Date.now();
     const result = {
-      unassigned: openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length,
-      processing: openTickets.filter(t => t.owner_id > 1).length,
+      unassigned: openTickets.filter(t => !t.owner_id).length,
+      processing: openTickets.filter(t => t.owner_id).length,
       closed: list.filter(t => [4,5].includes(t.state_id)).length,
       overdue: openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length
     };
@@ -95,6 +95,43 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: '登录已过期，请重新登录' });
   }
 }
+
+// ── AI 智能客服 ──
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
+const AI_SYSTEM_PROMPT = `你是苏州名城集团 IT 服务中心的智能客服助手。请用正式、专业的语气回答用户问题。
+
+你可以处理以下两种情况的用户请求：
+1. FAQ（简单咨询）：用户询问IT相关问题，直接给出答案
+2. 创建工单（需要人工处理）：用户描述了一个需要IT人员处理的问题
+
+回复格式必须是严格的JSON，不要带markdown代码块标记：
+- FAQ: {"type":"faq","content":"你的回答（简洁、分步骤）"}
+- 工单: {"type":"ticket","title":"工单标题（简短）","group":"分组名","description":"问题描述"}
+
+三个运维分组：桌面运维（电脑/打印机/会议设备）、网络运维（网络/VPN/WiFi）、应用系统运维（ERP/OA/邮箱/账号）。
+
+示例：用户"电脑无法开机" → {"type":"faq","content":"建议按以下步骤排查：1.检查电源线 2.长按电源键10秒 3.如仍无法开机请提交工单"}
+示例：用户"帮我重置邮箱密码" → {"type":"ticket","title":"邮箱密码重置","group":"应用系统运维","description":"用户请求重置邮箱密码。"}`;
+
+app.post('/api/ai/chat', authMiddleware, async (req, res) => {
+  const { message, history } = req.body;
+  if (!message) return res.status(400).json({ error: '请输入问题' });
+  try {
+    const msgs = [{ role: 'system', content: AI_SYSTEM_PROMPT }];
+    if (Array.isArray(history)) msgs.push(...history.slice(-10));
+    msgs.push({ role: 'user', content: message });
+    const aiRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_KEY}` },
+      body: JSON.stringify({ model: 'deepseek-chat', messages: msgs, max_tokens: 500, temperature: 0.3 })
+    });
+    const aiData = await aiRes.json();
+    const reply = (aiData.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
+    res.json(JSON.parse(reply));
+  } catch (e) {
+    res.json({ type: 'faq', content: '抱歉，AI 服务暂时不可用，请稍后重试或直接提交工单。' });
+  }
+});
 
 // ── 根据手机号查找或创建 Zammad 客户 ──
 async function getOrCreateZammadCustomer(phone) {
@@ -253,7 +290,7 @@ async function fetchZammadUserRole(phone) {
 }
 
 async function fetchZammadUserInfo(phone) {
-  const defaultResult = { role: 'customer', groups: [], userId: null };
+  const defaultResult = { role: 'customer', groups: [], userId: null, name: '' };
   try {
     // 按手机号搜索
     let res = await fetch(`${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone)}&limit=5`, {
@@ -300,7 +337,8 @@ async function fetchZammadUserInfo(phone) {
     return {
       role: getRole(detail.role_ids || []),
       groups,
-      userId: detail.id
+      userId: detail.id,
+      name: [detail.firstname, detail.lastname].filter(Boolean).join(' ') || detail.login || phone
     };
   } catch (e) { console.error('[用户信息] 获取失败:', e.message); }
   return defaultResult;
@@ -334,6 +372,7 @@ app.post('/auth/login', async (req, res) => {
   const info = await fetchZammadUserInfo(phone);
   users[phone].role = info.role;
   users[phone].groups = info.groups;
+  if (info.name) users[phone].name = info.name;
 
   const token = signToken({ phone, role: info.role });
   res.json({ ok: true, token, phone, role: info.role, groups: info.groups, name: users[phone].name });
@@ -344,9 +383,9 @@ app.get('/auth/me', authMiddleware, async (req, res) => {
   const u = users[req.user.phone];
   // 每次验证时同步 Zammad 角色和分组
   const info = await fetchZammadUserInfo(req.user.phone);
-  if (u) { u.role = info.role; u.groups = info.groups; }
+  if (u) { u.role = info.role; u.groups = info.groups; if (info.name) u.name = info.name; }
   const token = signToken({ phone: req.user.phone, role: info.role });
-  res.json({ phone: req.user.phone, role: info.role, groups: info.groups, name: u?.name || req.user.phone, token });
+  res.json({ phone: req.user.phone, role: info.role, groups: info.groups, name: u?.name || info.name || req.user.phone, token });
 });
 
 // ── 获取当前用户的工单列表 ──
@@ -378,11 +417,48 @@ app.get('/my-tickets', authMiddleware, async (req, res) => {
     const myTickets = allTickets
       .filter(t => t.customer_id === customerId)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    res.json(myTickets);
+    const enriched = await enrichTicketsWithCustomer(myTickets);
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── 工单富化：附加提单人姓名、电话、组织 ──
+async function enrichTicketsWithCustomer(tickets) {
+  const ids = [...new Set([
+    ...tickets.map(t => t.customer_id),
+    ...tickets.map(t => t.owner_id)
+  ].filter(Boolean))];
+  if (ids.length === 0) return tickets;
+  const userMap = {};
+  // 分批并发，避免压垮 Zammad
+  const batchSize = 10;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (id) => {
+      try {
+        const resp = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}?expand=true`, {
+          headers: { 'Authorization': `Token token=${API_TOKEN}` }
+        });
+        const u = await resp.json();
+        if (u.id) {
+          const name = [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-';
+          const phone = u.phone || u.mobile || '-';
+          const orgs = u.organization_ids || [];
+          userMap[id] = { name, phone, org: orgs.length > 0 ? orgs[0] : '-' };
+        }
+      } catch(e) {}
+    }));
+  }
+  return tickets.map(t => ({
+    ...t,
+    customer_name: (userMap[t.customer_id] || {}).name || '-',
+    customer_phone: (userMap[t.customer_id] || {}).phone || '-',
+    owner_name: (userMap[t.owner_id] || {}).name || '-',
+    owner_phone: (userMap[t.owner_id] || {}).phone || '-'
+  }));
+}
 
 // ── 邮件发送 ──
 let mailTransporter = null;
@@ -436,12 +512,9 @@ async function autoAssign(ticketId, groupName) {
     const group = (Array.isArray(groups) ? groups : []).find(g => g.name === groupName);
     if (!group) return console.log(`[派单] 找不到分组: ${groupName}`);
 
-    // 2. 获取该分组的处理人
-    const agentsRes = await fetch(`${ZAMMAD_URL}/api/v1/users?expand=true&limit=100`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
-    const allUsers = await agentsRes.json();
-    const agents = (Array.isArray(allUsers) ? allUsers : [])
+    // 2. 获取该分组的处理人（用fetchAll取全部，limit=100漏人）
+    const allUsers = await fetchAll(`${ZAMMAD_URL}/api/v1/users?expand=true`);
+    const agents = allUsers
       .filter(u => (u.role_ids || []).includes(2)) // 只取 Agent 角色
       .filter(u => {
         const gids = u.group_ids || {};
@@ -660,7 +733,8 @@ app.get('/my-dashboard', authMiddleware, async (req, res) => {
     const myTickets = allTickets
       .filter(t => t.owner_id === userId)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    res.json(myTickets);
+    const enriched = await enrichTicketsWithCustomer(myTickets);
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -210,7 +210,7 @@
   <script>
     // 已登录直接跳转
     if (localStorage.getItem('it_token')) {
-      window.location.href = 'list.html';
+      window.location.href = 'home.html';
     }
 
     let countdown = 0;
@@ -281,7 +281,7 @@
           localStorage.setItem('it_name', data.name);
           localStorage.setItem('it_role', data.role || 'customer');
           showMsg('登录成功', 'success');
-          setTimeout(() => { window.location.href = 'list.html'; }, 400);
+          setTimeout(() => { window.location.href = 'home.html'; }, 400);
         } else {
           showMsg(data.error, 'error');
           btn.disabled = false;
@@ -291,6 +291,8 @@
         showMsg('网络异常，请重试', 'error');
         btn.disabled = false;
         btn.textContent = '登 录';
+      } finally {
+        if (!data?.ok) { btn.disabled = false; btn.textContent = '登 录'; }
       }
     });
 

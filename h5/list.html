@@ -86,7 +86,7 @@
     <div class="modal-sheet" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="modal-content" id="modalContent"></div></div>
   </div>
 
-  <nav class="bottom-bar" id="bottomNav"></nav>
+  <!-- -->
 
   <script>
     const PAGE = 'list';
@@ -164,7 +164,7 @@
         : tickets.map(t => {
             const [label,cls] = statusMap[t.state_id]||['未知',''];
             const urge = ![4,5].includes(t.state_id);
-            return `<div class="ticket-card" onclick="openDetail(${t.id})"><div class="ticket-header"><span class="ticket-number">#${t.number||t.id}</span><span class="ticket-status ${cls}">${label}</span></div><div class="ticket-title">${t.title}</div><div class="ticket-meta">${t.group||''}${t.owner&&t.owner!=='-'?' · '+t.owner:''}</div><div class="ticket-time">${new Date(t.created_at).toLocaleString('zh-CN')}</div>${urge?`<button class="urge-btn" onclick="event.stopPropagation();urgeTicket(${t.id},this)">催办</button>`:''}</div>`;
+            return `<div class="ticket-card" onclick="openDetail(${t.id})"><div class="ticket-header"><span class="ticket-number">#${t.number||t.id}</span><span class="ticket-status ${cls}">${label}</span></div><div class="ticket-title">${t.title}</div><div class="ticket-meta">${t.customer_name||''}${t.customer_phone&&t.customer_phone!=='-'?' · 📞'+t.customer_phone:''}</div><div class="ticket-meta">${t.group||''} · ${t.owner_name&&t.owner_name!=='-'?'处理人: '+t.owner_name+(t.owner_phone&&t.owner_phone!=='-'?' 📞'+t.owner_phone:''):'待分配'}</div><div class="ticket-time">${new Date(t.created_at).toLocaleString('zh-CN')}</div>${urge?`<button class="urge-btn" onclick="event.stopPropagation();urgeTicket(${t.id},this)">催办</button>`:''}</div>`;
           }).join('');
     }
 
@@ -213,7 +213,7 @@
         const ticket = await tRes.json(); const articles = await aRes.json();
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         let ownerInfo = null;
-        if (ticket.owner_id>1) { try { const oRes=await apiFetch(`/api/v1/users/${ticket.owner_id}`); ownerInfo=await oRes.json(); } catch(e){} }
+        if (ticket.owner_id) { try { const oRes=await apiFetch(`/api/v1/users/${ticket.owner_id}`); ownerInfo=await oRes.json(); } catch(e){} }
         const [label] = statusMap[ticket.state_id]||['未知'];
         document.getElementById('modalContent').innerHTML = `
           <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>

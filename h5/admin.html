@@ -183,8 +183,8 @@
 
       let tickets;
       switch (currentFilter) {
-        case 'new':     tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && (!t.owner_id || t.owner_id <= 1)); break;
-        case 'open':    tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && t.owner_id > 1); break;
+        case 'new':     tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && !t.owner_id); break;
+        case 'open':    tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && t.owner_id); break;
         case 'closed':  tickets = allTickets.filter(t => [4,5].includes(t.state_id)); break;
         case 'overdue': tickets = allTickets.filter(t => ![4,5].includes(t.state_id) && (now - new Date(t.created_at).getTime()) > 4*3600*1000); break;
         default:        tickets = allTickets; break;
@@ -273,8 +273,8 @@
       window.location.href = 'submit.html';
     }
 
-    // 底部导航
-    document.addEventListener('DOMContentLoaded', () => {
+    // 底部导航（已停用）
+    /* document.addEventListener('DOMContentLoaded', () => {
       const nav = document.createElement('nav');
       nav.className = 'bottom-bar';
       nav.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e7eb;display:flex;z-index:50;padding:6px 0 env(safe-area-inset-bottom,8px);';
@@ -288,7 +288,7 @@
       });
       document.body.appendChild(nav);
       document.body.style.paddingBottom = '72px';
-    });
+    }); */
 
     loadAgents().then(() => { loadDashboard(); loadStats(); });
     setInterval(() => { loadDashboard(); loadStats(); }, 60000);
