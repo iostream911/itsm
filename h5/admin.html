@@ -60,7 +60,7 @@
   </style>
 </head>
 <body>
-  <div class="header">IT 服务管理台<button class="logout-btn" onclick="localStorage.clear();location.href='login.html'">退出</button></div>
+  <div class="header"><!-- close btn -->IT 服务管理台<button class="logout-btn" onclick="localStorage.clear();location.href='login.html'">退出登录</button></div>
   <div class="container">
     <div class="stats" id="statsCards">
       <div class="stat-item"><div class="stat-num" style="color:#f59e0b">-</div><div class="stat-label">待分配</div></div>
@@ -78,7 +78,7 @@
 
     <div class="refresh-bar">
       <span class="auto-refresh" id="refreshStatus">自动刷新中...</span>
-      <button class="refresh-btn" onclick="loadDashboard()">手动刷新</button>
+      <button class="refresh-btn" onclick="loadDashboard();loadStats()">手动刷新</button>
     </div>
 
     <div class="section">
@@ -141,28 +141,28 @@
     async function loadDashboard(reset) {
       document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
       try {
-        // 一次加载全部工单，不加expand
         const res = await fetch(`${API}/tickets?limit=2000`, { headers: {} });
         const data = await res.json();
         allTicketsCache = Array.isArray(data) ? data : [];
         now = Date.now();
         renderList();
-        loadStats();
         document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (err) {
         document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">加载失败</div>';
       }
     }
 
-    function loadStats() {
-      const list = allTicketsCache;
-      const openTickets = list.filter(t => ![4,5].includes(t.state_id));
-      document.getElementById('statsCards').innerHTML = `
-        <div class="stat-item${currentFilter==='new'?' active':''}" data-filter="new"><div class="stat-num" style="color:#f59e0b">${openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length}</div><div class="stat-label">待分配</div></div>
-        <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${openTickets.filter(t => t.owner_id > 1).length}</div><div class="stat-label">处理中</div></div>
-        <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${list.filter(t => [4,5].includes(t.state_id)).length}</div><div class="stat-label">已完成</div></div>
-        <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length}</div><div class="stat-label">超时 >4h</div></div>
-      `;
+    async function loadStats() {
+      try {
+        const r = await fetch('/api/v1/tickets-stats', {});
+        const s = await r.json();
+        document.getElementById('statsCards').innerHTML = `
+          <div class="stat-item${currentFilter==='new'?' active':''}" data-filter="new"><div class="stat-num" style="color:#f59e0b">${s.unassigned}</div><div class="stat-label">待分配</div></div>
+          <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${s.processing}</div><div class="stat-label">处理中</div></div>
+          <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${s.closed}</div><div class="stat-label">已完成</div></div>
+          <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${s.overdue}</div><div class="stat-label">超时 >4h</div></div>
+        `;
+      } catch(e) {}
     }
 
     function renderList() {
@@ -290,8 +290,8 @@
       document.body.style.paddingBottom = '72px';
     });
 
-    loadAgents().then(() => loadDashboard());
-    setInterval(loadDashboard, 60000);
+    loadAgents().then(() => { loadDashboard(); loadStats(); });
+    setInterval(() => { loadDashboard(); loadStats(); }, 60000);
 
     async function openDetail(id) {
       document.getElementById('modalOverlay').style.display='flex';

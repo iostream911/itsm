@@ -6,10 +6,10 @@
   <title>IT服务申请</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; padding-bottom: 72px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f3f4f6; min-height: 100vh; }
     .header { background: #1e40af; color: #fff; padding: 14px 20px; font-size: 17px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 10; }
     .header .logout-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-    .container { max-width: 500px; margin: 0 auto; padding: 16px; }
+    .container { max-width: 500px; margin: 0 auto; padding: 16px 16px 32px; }
     .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .card-title { font-size: 15px; font-weight: 600; color: #111827; margin-bottom: 12px; }
     label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
@@ -25,38 +25,42 @@
     .result.error   { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
     .result .ticket-number { font-size: 20px; font-weight: 700; margin: 4px 0; }
     .form-row { margin-bottom: 16px; }
-    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-radius: 50%; border-top-color: transparent; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+    .loading-dark { display: inline-block; width: 18px; height: 18px; border: 2px solid #e5e7eb; border-radius: 50%; border-top-color: #2563eb; animation: spin 0.6s linear infinite; vertical-align: middle; margin-bottom: 8px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .quick-btn { padding: 7px 14px; background: #f0f5ff; border: 1px solid #bfdbfe; border-radius: 20px; font-size: 12px; color: #1e40af; cursor: pointer; white-space: nowrap; }
     .quick-btn:active { background: #dbeafe; }
-
-    /* 底部导航栏 */
-    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e5e7eb; display: flex; z-index: 50; padding: 6px 0 env(safe-area-inset-bottom, 8px); }
-    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 0; color: #9ca3af; text-decoration: none; font-size: 10px; transition: color 0.15s; cursor: pointer; border: none; background: none; }
-    .nav-item .icon { font-size: 20px; line-height: 1; margin-bottom: 2px; }
-    .nav-item.active { color: #2563eb; }
+    .tile-group { display: flex; gap: 8px; }
+    .tile { flex: 1; text-align: center; padding: 14px 8px; border: 2px solid #e5e7eb; border-radius: 12px; cursor: pointer; transition: all 0.15s; background: #fff; }
+    .tile:active { transform: scale(0.97); }
+    .tile.selected { border-color: #2563eb; background: #eff6ff; }
+    .tile-icon { font-size: 24px; margin-bottom: 4px; }
+    .tile-label { font-size: 12px; font-weight: 500; color: #111827; }
+    .tile-desc { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+    .back-link { display: block; text-align: center; padding: 12px; color: #6b7280; text-decoration: none; font-size: 13px; margin-top: 8px; }
   </style>
 </head>
 <body>
-  <div class="header">IT 服务中心<button class="logout-btn" onclick="logout()">退出</button></div>
+  <div class="header">IT 服务中心<button class="logout-btn" onclick="logout()">退出登录</button></div>
   <div class="container">
-
     <div class="card">
       <div class="card-title">快速提单</div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="quickBtns"></div>
     </div>
-
     <div class="card">
       <div class="card-title">提交工单</div>
       <form id="ticketForm">
         <div class="form-row">
-          <label>问题类型 *</label>
-          <select id="category" required>
-            <option value="">请选择问题类型</option>
-            <option value="桌面运维">桌面运维 - 电脑/打印机/会议设备</option>
-            <option value="网络运维">网络运维 - 网络/VPN/端口</option>
-            <option value="应用系统运维">应用系统运维 - ERP/OA/其他系统</option>
-          </select>
+          <label>问题类型</label>
+          <div class="tile-group" id="categoryTiles">
+            <div class="tile selected" data-value="桌面运维" onclick="selectTile(this)">
+              <div class="tile-icon">🖥️</div><div class="tile-label">桌面运维</div><div class="tile-desc">电脑/打印机/会议</div></div>
+            <div class="tile" data-value="网络运维" onclick="selectTile(this)">
+              <div class="tile-icon">🌐</div><div class="tile-label">网络运维</div><div class="tile-desc">网络/VPN/端口</div></div>
+            <div class="tile" data-value="应用系统运维" onclick="selectTile(this)">
+              <div class="tile-icon">⚙️</div><div class="tile-label">应用系统运维</div><div class="tile-desc">ERP/OA/其他</div></div>
+          </div>
+          <input type="hidden" id="category" value="桌面运维">
         </div>
         <div class="form-row">
           <label>问题标题 *</label>
@@ -67,8 +71,8 @@
           <input type="text" id="location" placeholder="例如：3楼会议室、A栋201" maxlength="100">
         </div>
         <div class="form-row">
-          <label>详细描述 *</label>
-          <textarea id="body" placeholder="请详细描述遇到的情况" required></textarea>
+          <label>详细描述</label>
+          <textarea id="body" placeholder="请详细描述遇到的情况（选填）"></textarea>
         </div>
         <div class="form-row">
           <label>紧急程度</label>
@@ -81,11 +85,8 @@
       </form>
       <div id="result" class="result"></div>
     </div>
-
+    <a href="list.html" class="back-link">← 返回</a>
   </div>
-
-  <!-- 底部导航 -->
-  <nav class="bottom-bar" id="bottomNav"></nav>
 
   <script>
     const QUICK_ITEMS = [
@@ -99,72 +100,35 @@
       { label: '邮箱故障', title: '企业邮箱无法收发邮件',    group: '应用系统运维' }
     ];
 
-    // ── 公共：Token 管理 + 导航栏 ──
-    const PAGE = 'submit';
-    function getToken()  { return localStorage.getItem('it_token'); }
-    function getRole()   { return localStorage.getItem('it_role') || 'customer'; }
-    function logout()    { localStorage.clear(); window.location.href = 'login.html'; }
+    function getToken() { return localStorage.getItem('it_token'); }
+    function getRole()  { return localStorage.getItem('it_role') || 'customer'; }
+    function logout()   { localStorage.clear(); location.href='login.html'; }
 
-    function buildNav(role) {
-      const items = [
-        { id: 'submit', icon: '📝', label: '提交工单', href: 'submit.html', roles: ['admin','agent','customer'] },
-        { id: 'list',   icon: '📋', label: '我的工单', href: 'list.html',   roles: ['admin','agent','customer'] },
-        { id: 'agent',  icon: '📊', label: '我的看板', href: 'agent.html',  roles: ['admin','agent'] },
-        { id: 'admin',  icon: '🖥️', label: '管理看板', href: 'admin.html',  roles: ['admin'] },
-        { id: 'users',  icon: '👥', label: '用户管理', href: 'users.html',  roles: ['admin'] }
-      ];
-      return items
-        .filter(item => item.roles.includes(role))
-        .map(item => `<a class="nav-item${PAGE===item.id?' active':''}" href="${item.href}" onclick="navigate(event,'${item.href}')"><span class="icon">${item.icon}</span>${item.label}</a>`)
-        .join('');
-    }
-
-    function navigate(e, href) { e.preventDefault(); window.location.href = href; }
-
-    // ── 身份验证（健壮版本，不因网络错误退出）──
-    async function initAuth() {
-      const token = getToken();
-      if (!token) { logout(); return false; }
-
-      try {
-        const res = await fetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.status === 401) { logout(); return false; }  // Token 真过期才退出
-        if (!res.ok) return true;  // 网络错误等，不退出，继续用旧 token
-        const data = await res.json();
-        localStorage.setItem('it_token', data.token);
-        localStorage.setItem('it_role', data.role || 'customer');
-        const roleLabel = data.role==='admin'?'管理员':data.role==='agent'?'IT运维':'';
-        document.querySelector('.header').insertAdjacentHTML('beforeend',
-          `<div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">${data.phone}${roleLabel?' · '+roleLabel:''}</div>`);
-        document.getElementById('bottomNav').innerHTML = buildNav(data.role || 'customer');
-        return true;
-      } catch (e) { return true; }  // 网络异常，不退出，继续用旧 token
-    }
-
-    function apiFetch(url, options = {}) {
-      return fetch(url, {
-        ...options,
-        headers: { ...options.headers, 'Authorization': `Bearer ${getToken()}` }
-      }).then(res => {
-        if (res.status === 401) { logout(); throw new Error('登录已过期'); }
-        return res;
+    function apiFetch(url, opts = {}) {
+      return fetch(url, { ...opts, headers: { ...opts.headers, 'Authorization': 'Bearer '+getToken() } }).then(r => {
+        if (r.status === 401 || r.status === 403) { localStorage.clear(); location.href='login.html'; throw new Error('登录已过期'); }
+        return r;
       });
     }
 
-    // ── 快速提单 ──
+    function selectTile(el) {
+      document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.remove('selected'));
+      el.classList.add('selected');
+      document.getElementById('category').value = el.dataset.value;
+    }
+
     function quickSubmit(group, title) {
       document.getElementById('category').value = group;
+      document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.toggle('selected', t.dataset.value === group));
       document.getElementById('title').value = title;
       document.getElementById('body').value = '';
-      document.getElementById('body').focus();
-      document.getElementById('body').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('submitBtn').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     document.getElementById('quickBtns').innerHTML = QUICK_ITEMS.map(item =>
       `<button class="quick-btn" onclick="quickSubmit('${item.group}','${item.title}')">${item.label}</button>`
     ).join('');
 
-    // ── 提交工单 ──
     document.getElementById('ticketForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
@@ -178,16 +142,16 @@
         if (!res.ok) { const err = await res.json(); throw new Error(err.error || '提交失败'); }
         const data = await res.json();
         resultDiv.className = 'result success';
-        resultDiv.innerHTML = `✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div>`;
-        e.target.reset();
+        resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在跳转...</div>`;
+        setTimeout(() => { location.href = 'list.html'; }, 1500);
+        document.getElementById('category').value = '桌面运维';
+        document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.toggle('selected', t.dataset.value === '桌面运维'));
       } catch (err) {
         if (err.message === '登录已过期') return;
         resultDiv.className = 'result error';
         resultDiv.innerHTML = `❌ ${err.message}`;
       } finally { btn.disabled = false; btn.innerHTML = '提交工单'; }
     });
-
-    initAuth();
   </script>
 </body>
 </html>

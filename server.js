@@ -11,6 +11,23 @@ const path = require('path');
 const PORT = 3000;
 const ZAMMAD_URL = process.env.ZAMMAD_URL || 'http://localhost:8088';
 
+// 分页获取全部数据（Zammad API 每页最多100条）
+async function fetchAll(url) {
+  let page = 1, all = [];
+  while (true) {
+    const sep = url.includes('?') ? '&' : '?';
+    const resp = await fetch(`${url}${sep}page=${page}&per_page=100`, {
+      headers: { 'Authorization': `Token token=${API_TOKEN}` }
+    });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
 // QQ 邮箱配置（请在环境变量中设置，或直接修改这里）
 const EMAIL_USER = process.env.EMAIL_USER || '';
 const EMAIL_PASS = process.env.EMAIL_PASS || ''; // QQ邮箱授权码，不是QQ密码
@@ -27,11 +44,7 @@ app.get('/api/v1/users-stats', async (req, res) => {
   const entry = cache.get('users-stats');
   if (entry && Date.now() - entry.time < 5 * 60 * 1000) return res.json(entry.data);
   try {
-    const resp = await fetch(`${ZAMMAD_URL}/api/v1/users?limit=2000`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
-    const data = await resp.json();
-    const list = Array.isArray(data) ? data : [];
+    const list = await fetchAll(`${ZAMMAD_URL}/api/v1/users`);
     const result = {
       total: list.length,
       admins: list.filter(u => (u.role_ids||[]).includes(1)).length,
@@ -39,6 +52,25 @@ app.get('/api/v1/users-stats', async (req, res) => {
       customers: list.filter(u => !(u.role_ids||[]).some(r => [1,2].includes(r))).length
     };
     cache.set('users-stats', { time: Date.now(), data: result });
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 缓存工单统计（5分钟TTL）
+app.get('/api/v1/tickets-stats', async (req, res) => {
+  const entry = cache.get('tickets-stats');
+  if (entry && Date.now() - entry.time < 5 * 60 * 1000) return res.json(entry.data);
+  try {
+    const list = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
+    const openTickets = list.filter(t => ![4,5].includes(t.state_id));
+    const now = Date.now();
+    const result = {
+      unassigned: openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length,
+      processing: openTickets.filter(t => t.owner_id > 1).length,
+      closed: list.filter(t => [4,5].includes(t.state_id)).length,
+      overdue: openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length
+    };
+    cache.set('tickets-stats', { time: Date.now(), data: result });
     res.json(result);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -342,14 +374,10 @@ app.get('/my-tickets', authMiddleware, async (req, res) => {
 
     if (!customerId) return res.json([]);
 
-    const allRes = await fetch(
-      `${ZAMMAD_URL}/api/v1/tickets?expand=true`,
-      { headers: { 'Authorization': `Token token=${API_TOKEN}` } }
-    );
-    const allTickets = await allRes.json();
-    const myTickets = Array.isArray(allTickets)
-      ? allTickets.filter(t => t.customer_id === customerId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      : [];
+    const allTickets = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
+    const myTickets = allTickets
+      .filter(t => t.customer_id === customerId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json(myTickets);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -482,7 +510,7 @@ app.post('/my-tickets', authMiddleware, async (req, res) => {
     if (users[phone]) users[phone].zammadId = customerId;
 
     // 构建工单内容（包含地点信息）
-    const articleBody = location ? `【地点：${location}】\n${body || ''}` : (body || '');
+    const articleBody = location ? `【地点：${location}】\n${body || title}` : (body || title || '工单申请');
 
     const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets`, {
       method: 'POST',
@@ -627,14 +655,11 @@ app.get('/my-dashboard', authMiddleware, async (req, res) => {
     const userId = await findZammadUserId(phone);
     if (!userId) return res.json([]);
 
-    // 获取所有工单，过滤分配给自己的
-    const allRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets?expand=true`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
-    const allTickets = await allRes.json();
-    const myTickets = Array.isArray(allTickets)
-      ? allTickets.filter(t => t.owner_id === userId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      : [];
+    // 获取分配给自己的工单（不加expand，详情弹窗时才拉完整数据）
+    const allTickets = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
+    const myTickets = allTickets
+      .filter(t => t.owner_id === userId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json(myTickets);
   } catch (err) {
     res.status(500).json({ error: err.message });
