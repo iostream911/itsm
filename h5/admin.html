@@ -78,7 +78,7 @@
 
     <div class="refresh-bar">
       <span class="auto-refresh" id="refreshStatus">自动刷新中...</span>
-      <button class="refresh-btn" onclick="loadDashboard();loadStats()">手动刷新</button>
+      <button class="refresh-btn" onclick="loadDashboard(true);loadStats()">手动刷新</button>
     </div>
 
     <div class="section">
@@ -89,6 +89,7 @@
       <div id="ticketList">
         <div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>
       </div>
+      <div id="scrollSentinel" style="height:1px;"></div>
     </div>
 
     <div class="bottom-nav">
@@ -104,11 +105,12 @@
     const groups = ['桌面运维', '网络运维', '应用系统运维'];
     const statusMap = { 1: '待处理', 2: '已打开', 3: '待提醒', 4: '已关闭', 5: '已合并', 6: '待关闭' };
     const filterLabels = { new: '待分配（未指派人）', open: '处理中（已指派）', closed: '已完成工单', overdue: '超时工单', all: '全部工单' };
-    let currentFilter = 'new';
+    let currentFilter = 'open';
     let currentTimeRange = 'today';
     let allAgents = [];
     let allTicketsCache = [];
     let now = Date.now();
+    let initialLoadDone = false;
 
     function setTimeRange(range, btn) {
       currentTimeRange = range;
@@ -138,26 +140,29 @@
       } catch (e) { /* ignore */ }
     }
 
+    var ticketPage = 1, ticketHasMore = true, ticketLoading = false;
+
     async function loadDashboard(reset) {
-      document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
+      if (ticketLoading) return;
+      if (reset) { ticketPage = 1; ticketHasMore = true; allTicketsCache = []; }
+      if (!ticketHasMore) return;
+      ticketLoading = true;
       try {
-        // 循环取全部工单（每页100，最多10页）
-        var all = [], pg = 1;
-        while (pg <= 10) {
-          var r = await fetch(`${API}/tickets?page=${pg}&per_page=100`, { headers: {} });
-          var d = await r.json();
-          if (!Array.isArray(d) || d.length === 0) break;
-          all = all.concat(d);
-          if (d.length < 100) break;
-          pg++;
+        var r = await fetch(`${API}/tickets?page=${ticketPage}&per_page=15`, { headers: {} });
+        var d = await r.json();
+        if (!Array.isArray(d) || d.length === 0) { ticketHasMore = false; }
+        else {
+          allTicketsCache = allTicketsCache.concat(d);
+          ticketPage++;
+          if (d.length < 15) ticketHasMore = false;
         }
-        allTicketsCache = all;
         now = Date.now();
         renderList();
         document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (err) {
         document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">加载失败</div>';
       }
+      ticketLoading = false;
     }
 
     async function loadStats() {
@@ -240,7 +245,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ group: group })
         });
-        loadDashboard();
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert('派单失败');
       }
@@ -254,7 +259,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ owner_id: parseInt(ownerId) })
         });
-        loadDashboard();
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert('分配处理人失败');
       }
@@ -270,7 +275,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state_id: stateId })
         });
-        loadDashboard();
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert(`${label}失败`);
       }
@@ -298,8 +303,22 @@
       document.body.style.paddingBottom = '72px';
     }); */
 
-    loadAgents().then(() => { loadDashboard(); loadStats(); });
-    setInterval(() => { loadDashboard(); loadStats(); }, 60000);
+    var sentinel = document.getElementById('scrollSentinel');
+    var observer = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting && !ticketLoading && ticketHasMore && initialLoadDone) {
+        loadDashboard(false);
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(sentinel);
+
+    async function initialLoad() {
+      await loadAgents();
+      await loadDashboard(true);
+      await loadStats();
+      initialLoadDone = true;
+    }
+    initialLoad();
+    setInterval(() => { loadDashboard(true); loadStats(); }, 60000);
 
     async function openDetail(id) {
       document.getElementById('modalOverlay').style.display='flex';

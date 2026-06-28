@@ -27,6 +27,21 @@ async function fetchAll(url) {
   return all;
 }
 
+// Zammad 6.5+ POST /tickets/search 条件搜索
+async function searchTickets(condition, limit = 50) {
+  const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Token token=${API_TOKEN}`
+    },
+    body: JSON.stringify({ condition, limit, expand: true, with_total_count: true })
+  });
+  const data = await resp.json();
+  if (data.records) return data; // { records: [...], total_count: N }
+  return { records: Array.isArray(data) ? data : [], total_count: Array.isArray(data) ? data.length : 0 };
+}
+
 // QQ 邮箱配置（请在环境变量中设置，或直接修改这里）
 const EMAIL_USER = process.env.EMAIL_USER || '';
 const EMAIL_PASS = process.env.EMAIL_PASS || ''; // QQ邮箱授权码，不是QQ密码
@@ -60,14 +75,22 @@ app.get('/api/v1/tickets-stats', async (req, res) => {
   const entry = cache.get('tickets-stats');
   if (entry && Date.now() - entry.time < 5 * 60 * 1000) return res.json(entry.data);
   try {
-    const list = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
-    const openTickets = list.filter(t => ![4,5].includes(t.state_id));
-    const now = Date.now();
+    // 用 ES 聚合秒出统计
+    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
+    const esResp = await fetch(esUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: 0, aggs: { by_state: { terms: { field: 'state_id', size: 10 } }, by_owner: { terms: { field: 'owner_id', size: 10, missing: 0 } }, overdue: { filter: { bool: { must_not: [{ terms: { state_id: [4,5] } }], filter: { range: { created_at: { lte: 'now-4h' } } } } } } } })
+    });
+    const esData = await esResp.json();
+    const buckets = (esData.aggregations?.by_state?.buckets || []);
+    const ownerBuckets = (esData.aggregations?.by_owner?.buckets || []);
+    const getCount = (ids) => buckets.filter(b => ids.includes(b.key)).reduce((s,b) => s + b.doc_count, 0);
+    const unassigned = ownerBuckets.find(b => b.key === 0)?.doc_count || 0;
     const result = {
-      unassigned: openTickets.filter(t => !t.owner_id).length,
-      processing: openTickets.filter(t => t.owner_id).length,
-      closed: list.filter(t => [4,5].includes(t.state_id)).length,
-      overdue: openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length
+      unassigned: unassigned,
+      processing: getCount([1,2,3,6]) - unassigned,
+      closed: getCount([4,5]),
+      overdue: esData.aggregations?.overdue?.doc_count || 0
     };
     cache.set('tickets-stats', { time: Date.now(), data: result });
     res.json(result);
@@ -412,12 +435,30 @@ app.get('/my-tickets', authMiddleware, async (req, res) => {
 
     if (!customerId) return res.json([]);
 
-    const allTickets = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
-    const myTickets = allTickets
-      .filter(t => t.customer_id === customerId)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const enriched = await enrichTicketsWithCustomer(myTickets);
-    res.json(enriched);
+    const { records } = await searchTickets({
+      'ticket.customer_id': { operator: 'is', value: customerId }
+    }, 50);
+    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const ownerIds = [...new Set(records.map(t => t.owner_id).filter(Boolean))];
+    const userMap = {};
+    await Promise.all(ownerIds.map(async (id) => {
+      try {
+        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
+          headers: { 'Authorization': `Token token=${API_TOKEN}` }
+        });
+        const u = await r.json();
+        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
+      } catch(e) {}
+    }));
+
+    res.json(records.map(t => ({
+      ...t,
+      customer_name: t.customer || '-',
+      customer_phone: phone,
+      owner_name: (userMap[t.owner_id] || {}).name || t.owner || '-',
+      owner_phone: (userMap[t.owner_id] || {}).phone || '-'
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -727,13 +768,30 @@ app.get('/my-dashboard', authMiddleware, async (req, res) => {
     const userId = await findZammadUserId(phone);
     if (!userId) return res.json([]);
 
-    // 获取分配给自己的工单（不加expand，详情弹窗时才拉完整数据）
-    const allTickets = await fetchAll(`${ZAMMAD_URL}/api/v1/tickets`);
-    const myTickets = allTickets
-      .filter(t => t.owner_id === userId)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const enriched = await enrichTicketsWithCustomer(myTickets);
-    res.json(enriched);
+    const { records } = await searchTickets({
+      'ticket.owner_id': { operator: 'is', value: userId }
+    }, 50);
+    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const customerIds = [...new Set(records.map(t => t.customer_id).filter(Boolean))];
+    const userMap = {};
+    await Promise.all(customerIds.map(async (id) => {
+      try {
+        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
+          headers: { 'Authorization': `Token token=${API_TOKEN}` }
+        });
+        const u = await r.json();
+        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
+      } catch(e) {}
+    }));
+
+    res.json(records.map(t => ({
+      ...t,
+      customer_name: (userMap[t.customer_id] || {}).name || t.customer || '-',
+      customer_phone: (userMap[t.customer_id] || {}).phone || '-',
+      owner_name: t.owner || '-',
+      owner_phone: (userMap[userId] || {}).phone || '-'
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
