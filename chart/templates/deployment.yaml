@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicas }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      containers:
+      - name: {{ .Release.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ .Release.Name }}-config
+        - secretRef:
+            name: {{ .Release.Name }}-secret
+        env:
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: JWT_SECRET
+        - name: ZAMMAD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: ZAMMAD_TOKEN
+        - name: EMAIL_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: EMAIL_USER
+        - name: EMAIL_PASS
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: EMAIL_PASS
+        - name: SMS_LOGIN_NAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: SMS_LOGIN_NAME
+        - name: SMS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: SMS_PASSWORD
+        - name: SMS_SIGNATURE
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: SMS_SIGNATURE
+        - name: SMS_API_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: SMS_API_URL
+        - name: SMS_CORP_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-secret
+              key: SMS_CORP_ID
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.readinessProbe.path }}
+            port: {{ .Values.readinessProbe.port }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}

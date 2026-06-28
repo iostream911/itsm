@@ -21,6 +21,28 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('he
 const app = express();
 app.use(express.json());
 
+// 缓存统计端点（5分钟TTL，避免每次拉全量 767 用户）
+const cache = new Map();
+app.get('/api/v1/users-stats', async (req, res) => {
+  const entry = cache.get('users-stats');
+  if (entry && Date.now() - entry.time < 5 * 60 * 1000) return res.json(entry.data);
+  try {
+    const resp = await fetch(`${ZAMMAD_URL}/api/v1/users?limit=2000`, {
+      headers: { 'Authorization': `Token token=${API_TOKEN}` }
+    });
+    const data = await resp.json();
+    const list = Array.isArray(data) ? data : [];
+    const result = {
+      total: list.length,
+      admins: list.filter(u => (u.role_ids||[]).includes(1)).length,
+      agents: list.filter(u => (u.role_ids||[]).includes(2) && !(u.role_ids||[]).includes(1)).length,
+      customers: list.filter(u => !(u.role_ids||[]).some(r => [1,2].includes(r))).length
+    };
+    cache.set('users-stats', { time: Date.now(), data: result });
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── 内存用户存储（生产环境换成数据库）──
 const users = {};           // phone -> { phone, name, zammadId, createdAt }
 const verifyCodes = {};     // phone -> { code, expiresAt }
@@ -194,27 +216,62 @@ function getRole(roleIds) {
 
 // ── 从 Zammad 查找用户角色 ──
 async function fetchZammadUserRole(phone) {
+  const info = await fetchZammadUserInfo(phone);
+  return info.role;
+}
+
+async function fetchZammadUserInfo(phone) {
+  const defaultResult = { role: 'customer', groups: [], userId: null };
   try {
-    // 按手机号搜索（Zammad phone 字段 & email 中的 phone@it.local 模式）
+    // 按手机号搜索
     let res = await fetch(`${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone)}&limit=5`, {
       headers: { 'Authorization': `Token token=${API_TOKEN}` }
     });
     let list = await res.json();
+    let match = null;
     if (Array.isArray(list) && list.length > 0) {
-      // 精确匹配：phone 字段或 email 以 phone 开头
-      const match = list.find(u => u.phone === phone || (u.email && u.email.startsWith(phone)));
-      if (match) return getRole(match.role_ids || []);
+      match = list.find(u => u.phone === phone || (u.email && u.email.startsWith(phone)));
     }
-    // Fallback: email 拼接搜索
-    res = await fetch(`${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone + '@it.local')}&limit=1`, {
+    if (!match) {
+      // Fallback: email 拼接搜索
+      res = await fetch(`${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone + '@it.local')}&limit=1`, {
+        headers: { 'Authorization': `Token token=${API_TOKEN}` }
+      });
+      list = await res.json();
+      if (Array.isArray(list) && list.length > 0) match = list[0];
+    }
+    if (!match) return defaultResult;
+
+    // 获取完整用户信息（含 group_ids）
+    const detailRes = await fetch(`${ZAMMAD_URL}/api/v1/users/${match.id}?expand=true`, {
       headers: { 'Authorization': `Token token=${API_TOKEN}` }
     });
-    list = await res.json();
-    if (Array.isArray(list) && list.length > 0) {
-      return getRole(list[0].role_ids || []);
+    const detail = await detailRes.json();
+    if (!detail.id) return defaultResult;
+
+    // 解析分组名称
+    const groupIds = detail.group_ids || {};
+    const groups = [];
+    if (Object.keys(groupIds).length > 0) {
+      const groupsRes = await fetch(`${ZAMMAD_URL}/api/v1/groups`, {
+        headers: { 'Authorization': `Token token=${API_TOKEN}` }
+      });
+      const allGroups = await groupsRes.json();
+      if (Array.isArray(allGroups)) {
+        for (const gid of Object.keys(groupIds)) {
+          const g = allGroups.find(x => String(x.id) === gid);
+          if (g) groups.push(g.name);
+        }
+      }
     }
-  } catch (e) { /* ignore */ }
-  return 'customer';
+
+    return {
+      role: getRole(detail.role_ids || []),
+      groups,
+      userId: detail.id
+    };
+  } catch (e) { console.error('[用户信息] 获取失败:', e.message); }
+  return defaultResult;
 }
 
 // ── 验证码登录 ──
@@ -241,22 +298,23 @@ app.post('/auth/login', async (req, res) => {
     users[phone] = { phone, name: phone, createdAt: new Date().toISOString() };
   }
 
-  // 从 Zammad 查角色
-  const role = await fetchZammadUserRole(phone);
-  users[phone].role = role;
+  // 从 Zammad 查角色和分组
+  const info = await fetchZammadUserInfo(phone);
+  users[phone].role = info.role;
+  users[phone].groups = info.groups;
 
-  const token = signToken({ phone, role });
-  res.json({ ok: true, token, phone, role, name: users[phone].name });
+  const token = signToken({ phone, role: info.role });
+  res.json({ ok: true, token, phone, role: info.role, groups: info.groups, name: users[phone].name });
 });
 
 // ── 获取当前用户信息 + 刷新 Token ──
 app.get('/auth/me', authMiddleware, async (req, res) => {
   const u = users[req.user.phone];
-  // 每次验证时同步 Zammad 角色
-  const role = await fetchZammadUserRole(req.user.phone);
-  if (u) u.role = role;
-  const token = signToken({ phone: req.user.phone, role });
-  res.json({ phone: req.user.phone, role, name: u?.name || req.user.phone, token });
+  // 每次验证时同步 Zammad 角色和分组
+  const info = await fetchZammadUserInfo(req.user.phone);
+  if (u) { u.role = info.role; u.groups = info.groups; }
+  const token = signToken({ phone: req.user.phone, role: info.role });
+  res.json({ phone: req.user.phone, role: info.role, groups: info.groups, name: u?.name || req.user.phone, token });
 });
 
 // ── 获取当前用户的工单列表 ──

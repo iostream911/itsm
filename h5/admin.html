@@ -132,38 +132,37 @@
     // 加载处理人列表
     async function loadAgents() {
       try {
-        const res = await fetch(`${API}/users?expand=true&limit=50`, { headers: {} });
+        const res = await fetch(`${API}/users?limit=200`, { headers: {} });
         const data = await res.json();
-        // 筛选有 Agent 角色(2)的用户
         allAgents = Array.isArray(data) ? data.filter(u => (u.role_ids || []).includes(2)) : [];
       } catch (e) { /* ignore */ }
     }
 
-    async function loadDashboard() {
+    async function loadDashboard(reset) {
+      document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
       try {
-        const allRes = await fetch(`${API}/tickets?expand=true`, { headers: {} });
-        const data = await allRes.json();
+        // 一次加载全部工单，不加expand
+        const res = await fetch(`${API}/tickets?limit=2000`, { headers: {} });
+        const data = await res.json();
         allTicketsCache = Array.isArray(data) ? data : [];
         now = Date.now();
-
-        const openTickets = allTicketsCache.filter(t => ![4,5].includes(t.state_id));
-        const unassigned = openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length;
-        const processing  = openTickets.filter(t => t.owner_id > 1).length;
-        const closedC    = allTicketsCache.filter(t => [4,5].includes(t.state_id)).length;
-        const overdueC   = openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length;
-
-        document.getElementById('statsCards').innerHTML = `
-          <div class="stat-item${currentFilter==='new'?' active':''}" data-filter="new"><div class="stat-num" style="color:#f59e0b">${unassigned}</div><div class="stat-label">待分配</div></div>
-          <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${processing}</div><div class="stat-label">处理中</div></div>
-          <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${closedC}</div><div class="stat-label">已完成</div></div>
-          <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${overdueC}</div><div class="stat-label">超时 >4h</div></div>
-        `;
-
         renderList();
+        loadStats();
         document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (err) {
         document.getElementById('ticketList').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">加载失败</div>';
       }
+    }
+
+    function loadStats() {
+      const list = allTicketsCache;
+      const openTickets = list.filter(t => ![4,5].includes(t.state_id));
+      document.getElementById('statsCards').innerHTML = `
+        <div class="stat-item${currentFilter==='new'?' active':''}" data-filter="new"><div class="stat-num" style="color:#f59e0b">${openTickets.filter(t => !t.owner_id || t.owner_id <= 1).length}</div><div class="stat-label">待分配</div></div>
+        <div class="stat-item${currentFilter==='open'?' active':''}" data-filter="open"><div class="stat-num" style="color:#2563eb">${openTickets.filter(t => t.owner_id > 1).length}</div><div class="stat-label">处理中</div></div>
+        <div class="stat-item${currentFilter==='closed'?' active':''}" data-filter="closed"><div class="stat-num" style="color:#059669">${list.filter(t => [4,5].includes(t.state_id)).length}</div><div class="stat-label">已完成</div></div>
+        <div class="stat-item${currentFilter==='overdue'?' active':''}" data-filter="overdue"><div class="stat-num" style="color:#ef4444">${openTickets.filter(t => (now - new Date(t.created_at).getTime()) > 4*3600*1000).length}</div><div class="stat-label">超时 >4h</div></div>
+      `;
     }
 
     function renderList() {

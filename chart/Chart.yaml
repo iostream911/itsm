@@ -1,0 +1,6 @@
+apiVersion: v2
+name: itsm
+description: ITSM 服务
+type: application
+version: 1.0.0
+appVersion: "1.2.2"

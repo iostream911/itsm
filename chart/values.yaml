@@ -1,0 +1,46 @@
+# 镜像
+image:
+  repository: harbor.szctdg.tech/itsm/itsm
+  tag: v1.2.2
+  pullPolicy: Always
+
+# 副本数
+replicas: 2
+
+# 资源
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# 服务
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30081
+
+# Ingress
+ingress:
+  host: itsm.172.24.16.40.nip.io
+
+# 健康检查
+readinessProbe:
+  path: /login.html
+  port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# Harbor 登录密钥
+imagePullSecrets:
+  - name: harbor-registry
+
+# 配置文件
+config:
+  TZ: Asia/Shanghai
+  ZAMMAD_URL: "http://zammad-railsserver:3000"
+
+# 密钥（基础值，实际值在 k8s secret 中）
+secrets: {}

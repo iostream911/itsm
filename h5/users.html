@@ -72,7 +72,7 @@
       <input type="text" id="searchInput" placeholder="搜索姓名、邮箱、手机号...">
     </div>
     <div id="userList"><div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div></div>
-    <div class="bottom-nav">
+    <div id="loadMore" style="text-align:center;padding:20px;color:#9ca3af;display:none;">加载更多...</div><div class="bottom-nav">
       <a href="admin.html">管理看板</a>
       <a href="submit.html">用户端</a>
     </div>
@@ -88,7 +88,6 @@
 
   <script>
     const API = '/api/v1';
-    let allUsers = [];
     let currentFilter = 'all';
 
     // ── 统计卡片点击筛选 ──
@@ -100,18 +99,71 @@
     });
 
     // ── 搜索 ──
-    document.getElementById('searchInput').addEventListener('input', renderUsers);
+    document.getElementById('searchInput').addEventListener('input', () => loadPage(true));
 
-    async function loadUsers() {
+    const PAGE_SIZE = 15;
+    let allUsers = [];
+    let currentPage = 1;
+    let hasMore = true;
+    let loading = false;
+
+    // 独立请求：全量统计（走缓存端点，快）
+    async function loadStats() {
       try {
-        const res = await fetch(`${API}/users?expand=true&limit=200`, { headers: {} });
+        const res = await fetch('/api/v1/users-stats', {});
         const data = await res.json();
-        allUsers = Array.isArray(data) ? data : [];
+        document.getElementById('statsCards').innerHTML = `
+          <div class="stat-item${currentFilter==='admin'?' active':''}" data-filter="admin"><div class="stat-num" style="color:#7c3aed">${data.admins}</div><div class="stat-label">管理员</div></div>
+          <div class="stat-item${currentFilter==='agent'?' active':''}" data-filter="agent"><div class="stat-num" style="color:#2563eb">${data.agents}</div><div class="stat-label">IT运维</div></div>
+          <div class="stat-item${currentFilter==='customer'?' active':''}" data-filter="customer"><div class="stat-num" style="color:#6b7280">${data.customers}</div><div class="stat-label">普通用户</div></div>
+          <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all"><div class="stat-num">${data.total}</div><div class="stat-label">总计</div></div>
+        `;
+      } catch(e) {}
+    }
+
+    // 分页加载列表
+    async function loadPage(reset) {
+      if (loading) return;
+      if (reset) { currentPage = 1; hasMore = true; allUsers = []; document.getElementById('userList').innerHTML = ''; }
+      if (!hasMore) return;
+      loading = true;
+      document.getElementById('loadMore').style.display = 'block';
+      try {
+        const res = await fetch(`${API}/users?page=${currentPage}&per_page=${PAGE_SIZE}`, {});
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        if (list.length < PAGE_SIZE) hasMore = false;
+        allUsers = allUsers.concat(list);
+        currentPage++;
         renderUsers();
-      } catch (e) {
+      } catch(e) {
         document.getElementById('userList').innerHTML = '<div class="empty">加载失败</div>';
       }
+      loading = false;
+      document.getElementById('loadMore').style.display = hasMore ? 'block' : 'none';
     }
+
+    // 组织名缓存
+    let orgMap = {};
+
+    async function loadOrgs() {
+      try {
+        const res = await fetch('/api/v1/organizations?limit=2000', {});
+        const data = await res.json();
+        if (Array.isArray(data)) data.forEach(o => { orgMap[o.id] = o.name; });
+      } catch(e) {}
+    }
+
+    // 初始化：统计、组织、第一页并行
+    loadStats();
+    loadOrgs();
+    loadPage(true);
+
+    // 无限滚动
+    const sentinel = document.getElementById('loadMore');
+    new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !loading) loadPage(false);
+    }, { rootMargin: '200px' }).observe(sentinel);
 
     function renderUsers() {
       const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -135,26 +187,6 @@
           return name.includes(keyword);
         });
       }
-
-      // 统计
-      const admins   = allUsers.filter(u => (u.role_ids||[]).includes(1)).length;
-      const agents   = allUsers.filter(u => (u.role_ids||[]).includes(2) && !(u.role_ids||[]).includes(1)).length;
-      const customers = allUsers.filter(u => !(u.role_ids||[]).some(r => [1,2].includes(r))).length;
-
-      document.getElementById('statsCards').innerHTML = `
-        <div class="stat-item${currentFilter==='admin'?' active':''}" data-filter="admin">
-          <div class="stat-num" style="color:#7c3aed">${admins}</div><div class="stat-label">管理员</div>
-        </div>
-        <div class="stat-item${currentFilter==='agent'?' active':''}" data-filter="agent">
-          <div class="stat-num" style="color:#2563eb">${agents}</div><div class="stat-label">IT运维</div>
-        </div>
-        <div class="stat-item${currentFilter==='customer'?' active':''}" data-filter="customer">
-          <div class="stat-num" style="color:#6b7280">${customers}</div><div class="stat-label">普通用户</div>
-        </div>
-        <div class="stat-item${currentFilter==='all'?' active':''}" data-filter="all">
-          <div class="stat-num">${allUsers.length}</div><div class="stat-label">总计</div>
-        </div>
-      `;
 
       document.getElementById('userList').innerHTML = users.length === 0
         ? '<div class="empty">未找到匹配的用户</div>'
@@ -195,13 +227,26 @@
         const name = u.firstname || u.lastname ? `${u.firstname||''} ${u.lastname||''}`.trim() : (u.login || u.email || u.phone || '-');
 
         // 组织信息
-        const orgs = (u.organization_ids || []);
+        const orgs = (u.organization_ids || []).map(id => orgMap[id] || id);
         const orgNames = orgs.length > 0 ? orgs.join(', ') : '无';
 
-        // 分组信息
-        const groupNames = u.group_ids && typeof u.group_ids === 'object'
-          ? Object.values(u.group_ids).filter(v => v !== 'full').join(', ')
-          : '无';
+        // 分组信息 — ITSM 代理会自动加 Token
+        let groupNames = '无';
+        if (u.group_ids && typeof u.group_ids === 'object') {
+          const gids = Object.keys(u.group_ids);
+          if (gids.length > 0) {
+            try {
+              const gr = await fetch('/api/v1/groups');
+              if (gr.ok) {
+                const allGroups = await gr.json();
+                groupNames = gids.map(gid => {
+                  const g = (Array.isArray(allGroups) ? allGroups : []).find(x => String(x.id) === gid);
+                  return g ? g.name : gid;
+                }).join(', ');
+              }
+            } catch(e) { groupNames = gids.join(','); }
+          }
+        }
 
         // 工单统计
         const ticketsOpen  = u.preferences?.tickets_open  ?? '-';
@@ -266,7 +311,7 @@
         });
         document.getElementById('modalOverlay').style.display = 'none';
         document.body.style.overflow = '';
-        loadUsers();
+        loadPage(true); loadStats();
       } catch (e) {
         alert('修改失败');
       }
@@ -309,11 +354,10 @@
         });
         document.getElementById("modalOverlay").style.display = "none";
         document.body.style.overflow = "";
-        loadUsers();
+        loadPage(true); loadStats();
       } catch(e) { alert("操作失败"); }
     }
 
-    loadUsers();
   </script>
 </body>
 </html>
