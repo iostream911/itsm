@@ -131,6 +131,18 @@ app.get('/my-dashboard-count', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// 全部运维人员列表（Zammad 按 role_ids 搜索，秒出）
+app.get('/api/v1/agents', async (req, res) => {
+  try {
+    const resp = await fetch(`${ZAMMAD_URL}/api/v1/users/search?role_ids%5B%5D=2&limit=50`, {
+      headers: { 'Authorization': `Token token=${API_TOKEN}` }
+    });
+    const data = await resp.json();
+    const agents = (Array.isArray(data) ? data : []).filter(u => u.id !== 3);
+    res.json(agents);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── 内存用户存储（生产环境换成数据库）──
 const users = {};           // phone -> { phone, name, zammadId, createdAt }
 const verifyCodes = {};     // phone -> { code, expiresAt }

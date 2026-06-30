@@ -205,9 +205,9 @@
     let agentCache = [];
     async function loadAgentList() {
       try {
-        const res = await apiFetch('/api/v1/users?limit=200');
+        const res = await apiFetch('/api/v1/agents');
         const data = await res.json();
-        agentCache = Array.isArray(data) ? data.filter(u => (u.role_ids||[]).includes(2)) : [];
+        agentCache = Array.isArray(data) ? data : [];
       } catch(e) {}
     }
 

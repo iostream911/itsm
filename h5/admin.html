@@ -134,9 +134,9 @@
     // 加载处理人列表
     async function loadAgents() {
       try {
-        const res = await fetch(`${API}/users?limit=200`, { headers: {} });
+        const res = await fetch(`${API}/agents`, { headers: {} });
         const data = await res.json();
-        allAgents = Array.isArray(data) ? data.filter(u => (u.role_ids || []).includes(2)) : [];
+        allAgents = Array.isArray(data) ? data : [];
       } catch (e) { /* ignore */ }
     }
 
