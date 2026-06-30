@@ -10,7 +10,7 @@ const SSO_URL = 'http://sso.szctdg.com:8080/WLUM/api/sync/user';
 const SEQ_FILE = path.join(__dirname, '..', '.sync-sequence');
 const ZAMMAD_URL = 'http://localhost:8088';
 const API_TOKEN = process.env.ZAMMAD_TOKEN || '';
-const TEST_LIMIT = 15; // 测试模式：只导 15 条，设 0 全量
+const TEST_LIMIT = 0; // 全量同步
 const BATCH_DELAY = 200;
 
 // 读取上次同步的序列号
