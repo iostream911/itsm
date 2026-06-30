@@ -730,21 +730,20 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
     });
     const data = await ticketRes.json();
 
-    // 分配处理人后发送邮件通知
+    // 分配处理人后异步发邮件，不阻塞响应
     if (ticketRes.ok && body.owner_id && body.owner_id > 1) {
-      try {
-        const [tRes, oRes] = await Promise.all([
-          fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, { headers: { 'Authorization': `Token token=${API_TOKEN}` } }),
-          fetch(`${ZAMMAD_URL}/api/v1/users/${body.owner_id}`, { headers: { 'Authorization': `Token token=${API_TOKEN}` } })
-        ]);
+      const headers = { 'Authorization': `Token token=${API_TOKEN}` };
+      Promise.all([
+        fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, { headers }),
+        fetch(`${ZAMMAD_URL}/api/v1/users/${body.owner_id}`, { headers })
+      ]).then(async ([tRes, oRes]) => {
         const ticket = await tRes.json();
         const owner = await oRes.json();
         const mailer = getMailer();
         if (mailer && owner.email) {
           await mailer.sendMail({
             from: `IT服务中心 <${EMAIL_FROM}>`,
-            to: owner.email,
-            bcc: EMAIL_USER,
+            to: owner.email, bcc: EMAIL_USER,
             subject: `【新工单指派】#${ticket.number} ${ticket.title}`,
             html: `<h3>工单已分配给您</h3>
               <table style="border-collapse:collapse;width:100%;max-width:500px;">
@@ -754,9 +753,9 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
               <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">处理人</td><td style="padding:8px;border:1px solid #e5e7eb;">${owner.firstname||''} ${owner.lastname||''}</td></tr></table>
               <p style="margin-top:16px;">请至企业微信 - <a href="https://mczc.szmcjt.com:9443/home.html">IT工作台</a> 处理</p>`
           });
-          console.log(`[分配] 工单 #${ticket.number} 分配给 ${owner.email}，邮件已通知`);
+          console.log('[分配] 工单 #' + ticket.number + ' 分配给 ' + owner.email);
         }
-      } catch (e) { console.log('[分配] 邮件发送失败:', e.message); }
+      }).catch(e => console.log('[分配] 邮件发送失败:', e.message));
     }
 
     res.status(ticketRes.status).json(data);
