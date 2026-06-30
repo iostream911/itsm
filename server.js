@@ -609,30 +609,17 @@ async function autoAssign(ticketId, groupName) {
 
     if (agents.length === 0) return console.log('[派单] 分组 ' + groupName + ' 无 agent');
 
-    // 3. VIP 优先
-    const vipAgents = agents.filter(a => a.vip === true);
-    const candidates = vipAgents.length > 0 ? vipAgents : agents;
+    // 3. VIP 优先，直接取第一个
+    const vipAgent = agents.find(a => a.vip === true);
+    const bestAgent = vipAgent || agents[0];
 
-    // 4. ES 查每个候选人 open 工单数，找负载最低的
-    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
-    let bestAgent = candidates[0], minLoad = Infinity;
-    for (const agent of candidates) {
-      const esResp = await fetch(esUrl, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size: 0, query: { bool: { must: [{ term: { owner_id: agent.id } }], must_not: [{ terms: { state_id: [4, 5] } }] } } })
-      });
-      const esData = await esResp.json();
-      const load = esData.hits?.total?.value || 0;
-      if (load < minLoad) { minLoad = load; bestAgent = agent; }
-    }
-
-    // 5. 分配工单
+    // 4. 分配工单
     await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}`, {
       method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ owner_id: bestAgent.id, state_id: 2 })
     });
-    const label = vipAgents.length > 0 ? ' [VIP]' : '';
-    console.log('[派单] #' + ticketId + ' -> ' + bestAgent.firstname + ' ' + bestAgent.lastname + ' (' + bestAgent.email + ') load=' + minLoad + label);
+    const label = vipAgent ? ' [VIP]' : '';
+    console.log('[派单] #' + ticketId + ' -> ' + bestAgent.firstname + ' ' + bestAgent.lastname + ' (' + bestAgent.email + ')' + label);
 
     // 6. 发送邮件通知
     const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, { headers });
