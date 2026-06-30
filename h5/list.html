@@ -127,7 +127,7 @@
     }
 
     const statusMap = { 1: ['待处理', 'status-new'], 2: ['已打开', 'status-open'], 3: ['待提醒', 'status-pending'], 4: ['已关闭', 'status-closed'], 5: ['已合并', 'status-closed'], 6: ['待关闭', 'status-pending'] };
-    let allTickets = [], currentFilter = 'all';
+    let allTickets = [], currentFilter = 'all', totalCount = 0;
 
     document.getElementById('stats').addEventListener('click', (e) => {
       const item = e.target.closest('.stat-item');
@@ -137,14 +137,16 @@
       renderTickets();
     });
 
-    let totalCount = 0;
-
     async function loadTickets() {
       try {
-        const res = await apiFetch('/my-tickets');
-        const data = await res.json();
-        if (data.tickets) { allTickets = data.tickets; totalCount = data.total; }
-        else { allTickets = Array.isArray(data) ? data : []; totalCount = allTickets.length; }
+        const [ticketsRes, countRes] = await Promise.all([
+          apiFetch('/my-tickets'),
+          apiFetch('/my-tickets-count')
+        ]);
+        const data = await ticketsRes.json();
+        allTickets = Array.isArray(data) ? data : [];
+        const countData = await countRes.json();
+        totalCount = countData.total || allTickets.length;
         updateStats(); renderTickets();
       } catch (err) { if (err.message==='登录已过期') return; }
     }

@@ -148,7 +148,7 @@
       if (!ticketHasMore) return;
       ticketLoading = true;
       try {
-        var r = await fetch(`${API}/tickets-sorted?page=${ticketPage}&per_page=15`, { headers: {} });
+        var r = await fetch(`${API}/tickets?page=${ticketPage}&per_page=15`, { headers: {} });
         var d = await r.json();
         if (!Array.isArray(d) || d.length === 0) { ticketHasMore = false; }
         else {
