@@ -578,7 +578,7 @@ async function sendAssignmentEmail(ticket, agentEmail, agentName) {
           <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">分组</td><td style="padding:8px;border:1px solid #e5e7eb;">${ticket.group || '-'}</td></tr>
           <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">处理人</td><td style="padding:8px;border:1px solid #e5e7eb;">${agentName}</td></tr>
         </table>
-        <p style="margin-top:16px;">请登录 Zammad 处理：<a href="http://localhost:8088">http://localhost:8088</a></p>
+        <p style="margin-top:16px;">请至企业微信 - <a href="https://mczc.szmcjt.com:9443/home.html">IT工作台</a> 处理</p>
       `
     });
     console.log(`[邮件] 已发送通知给 ${agentEmail}`);
@@ -773,7 +773,7 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
               <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">标题</td><td style="padding:8px;border:1px solid #e5e7eb;">${ticket.title}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">分组</td><td style="padding:8px;border:1px solid #e5e7eb;">${ticket.group||'-'}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">处理人</td><td style="padding:8px;border:1px solid #e5e7eb;">${owner.firstname||''} ${owner.lastname||''}</td></tr></table>
-              <p style="margin-top:16px;">请登录处理：<a href="http://localhost:8088">Zammad</a></p>`
+              <p style="margin-top:16px;">请至企业微信 - <a href="https://mczc.szmcjt.com:9443/home.html">IT工作台</a> 处理</p>`
           });
           console.log(`[分配] 工单 #${ticket.number} 分配给 ${owner.email}，邮件已通知`);
         }
@@ -891,7 +891,7 @@ app.post('/api/v1/tickets/:id/transfer-notify', async (req, res) => {
             <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">分组</td><td style="padding:8px;border:1px solid #e5e7eb;">${ticket.group||'-'}</td></tr>
             <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;">新处理人</td><td style="padding:8px;border:1px solid #e5e7eb;">${ownerName}</td></tr>
           </table>
-          <p style="margin-top:16px;">请登录处理：<a href="http://localhost:8088">Zammad</a></p>
+          <p style="margin-top:16px;">请至企业微信 - <a href="https://mczc.szmcjt.com:9443/home.html">IT工作台</a> 处理</p>
         `
       });
       console.log(`[转派] 工单 #${ticket.number} 已转派给 ${ownerName}，邮件已通知`);
