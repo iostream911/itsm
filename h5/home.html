@@ -129,15 +129,16 @@
     async function createTicket() {
       var card = document.getElementById('confirmCard');
       if (!card) return;
-      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
       var titleEl = document.getElementById('cfTitle');
       var groupEl = document.getElementById('cfGroup');
       var descEl = document.getElementById('cfDesc');
       if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
+      var title = titleEl.value, group = groupEl.value, desc = descEl.value;
+      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
-          body: JSON.stringify({ title: titleEl.value, group: groupEl.value, body: descEl.value })
+          body: JSON.stringify({ title: title, group: group, body: desc })
         });
         if (res.ok) { location.href = 'list.html'; }
         else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }
