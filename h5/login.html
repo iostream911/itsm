@@ -264,17 +264,19 @@
       const btn = document.getElementById('loginBtn');
 
       if (!phone || !code) return;
+      if (btn.disabled) return;
 
       btn.disabled = true;
       btn.textContent = '登录中...';
 
+      let data;
       try {
         const res = await fetch('/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone, code })
         });
-        const data = await res.json();
+        data = await res.json();
         if (data.ok) {
           localStorage.setItem('it_token', data.token);
           localStorage.setItem('it_phone', data.phone);
@@ -284,15 +286,13 @@
           setTimeout(() => { window.location.href = 'home.html'; }, 400);
         } else {
           showMsg(data.error, 'error');
-          btn.disabled = false;
-          btn.textContent = '登 录';
         }
       } catch (e) {
         showMsg('网络异常，请重试', 'error');
+      }
+      if (!data?.ok) {
         btn.disabled = false;
         btn.textContent = '登 录';
-      } finally {
-        if (!data?.ok) { btn.disabled = false; btn.textContent = '登 录'; }
       }
     });
 
