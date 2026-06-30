@@ -588,66 +588,60 @@ async function sendAssignmentEmail(ticket, agentEmail, agentName) {
 // ── 自动派单：按分组找负载最低的处理人 ──
 async function autoAssign(ticketId, groupName) {
   try {
-    // 1. 获取分组 ID
-    const groupRes = await fetch(`${ZAMMAD_URL}/api/v1/groups`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
+    const headers = { 'Authorization': `Token token=${API_TOKEN}` };
+
+    // 1. 获取分组信息
+    const groupRes = await fetch(`${ZAMMAD_URL}/api/v1/groups`, { headers });
     const groups = await groupRes.json();
     const group = (Array.isArray(groups) ? groups : []).find(g => g.name === groupName);
-    if (!group) return console.log(`[派单] 找不到分组: ${groupName}`);
+    if (!group) return console.log('[派单] 找不到分组: ' + groupName);
+    const groupId = group.id;
 
-    // 2. 获取该分组的处理人（用fetchAll取全部，limit=100漏人）
-    const allUsers = await fetchAll(`${ZAMMAD_URL}/api/v1/users?expand=true`);
-    const agents = allUsers
-      .filter(u => (u.role_ids || []).includes(2)) // 只取 Agent 角色
+    // 2. 搜全部 agent（Zammad role_ids 搜索，秒出 <5 条）
+    const agentsRes = await fetch(`${ZAMMAD_URL}/api/v1/users/search?role_ids%5B%5D=2&limit=50`, { headers });
+    const allAgents = await agentsRes.json();
+    const agents = (Array.isArray(allAgents) ? allAgents : [])
+      .filter(u => u.id !== 3) // 排除测试用户
       .filter(u => {
         const gids = u.group_ids || {};
-        return Object.keys(gids).some(gid => gids[gid] && groups.find(g => g.id == gid && g.name === groupName));
-      })
-      .filter(u => u.id !== 3); // 排除管理员，不参与自动派单
+        return Object.keys(gids).some(gid => gids[gid] && Number(gid) === groupId);
+      });
 
-    if (agents.length === 0) return console.log(`[派单] 分组 ${groupName} 暂无处理人`);
+    if (agents.length === 0) return console.log('[派单] 分组 ' + groupName + ' 无 agent');
 
-    // 3. VIP 优先：如果该组有 VIP 运维人员，则只看 VIP
+    // 3. VIP 优先
     const vipAgents = agents.filter(a => a.vip === true);
     const candidates = vipAgents.length > 0 ? vipAgents : agents;
-    const vipLabel = vipAgents.length > 0 ? ' [VIP优先]' : '';
 
-    // 4. 找负载最低的（拥有最少 open 工单的处理人）
-    const ticketsRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets?expand=true`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
-    const allTickets = await ticketsRes.json();
-    const ticketList = Array.isArray(allTickets) ? allTickets : [];
-
-    let bestAgent = candidates[0];
-    let minLoad = Infinity;
+    // 4. ES 查每个候选人 open 工单数，找负载最低的
+    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
+    let bestAgent = candidates[0], minLoad = Infinity;
     for (const agent of candidates) {
-      const load = ticketList.filter(t => t.owner_id === agent.id && ![4,5].includes(t.state_id)).length;
+      const esResp = await fetch(esUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size: 0, query: { bool: { must: [{ term: { owner_id: agent.id } }], must_not: [{ terms: { state_id: [4, 5] } }] } } })
+      });
+      const esData = await esResp.json();
+      const load = esData.hits?.total?.value || 0;
       if (load < minLoad) { minLoad = load; bestAgent = agent; }
     }
 
-    // 4. 分配工单
+    // 5. 分配工单
     await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token token=${API_TOKEN}`
-      },
-      body: JSON.stringify({ owner_id: bestAgent.id, state_id: 2 }) // 分配后自动改为"已打开"状态
+      method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner_id: bestAgent.id, state_id: 2 })
     });
-    console.log(`[派单] 工单 #${ticketId} → ${bestAgent.firstname}${bestAgent.lastname || ''} (${bestAgent.email}) (负载: ${minLoad})${vipLabel}`);
+    const label = vipAgents.length > 0 ? ' [VIP]' : '';
+    console.log('[派单] #' + ticketId + ' -> ' + bestAgent.firstname + ' ' + bestAgent.lastname + ' (' + bestAgent.email + ') load=' + minLoad + label);
 
-    // 5. 发送邮件通知
-    const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, {
-      headers: { 'Authorization': `Token token=${API_TOKEN}` }
-    });
+    // 6. 发送邮件通知
+    const ticketRes = await fetch(`${ZAMMAD_URL}/api/v1/tickets/${ticketId}?expand=true`, { headers });
     const ticket = await ticketRes.json();
-    await sendAssignmentEmail(ticket, bestAgent.email, `${bestAgent.firstname}${bestAgent.lastname || ''}`);
+    await sendAssignmentEmail(ticket, bestAgent.email, (bestAgent.firstname || '') + (bestAgent.lastname || ''));
 
     return bestAgent;
   } catch (err) {
-    console.log(`[派单] 错误: ${err.message}`);
+    console.log('[派单] 错误: ' + err.message);
     return null;
   }
 }
