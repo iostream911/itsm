@@ -474,37 +474,35 @@ async function findZammadUserId(phone) {
   return null;
 }
 
+// 直查 ES，一次请求返回 ticket + 内嵌的 customer/owner 信息
+function mapTicketSource(s) {
+  return {
+    id: s.id, number: s.number, title: s.title,
+    state_id: s.state_id, group_id: s.group_id,
+    owner_id: s.owner_id, customer_id: s.customer_id,
+    priority_id: s.priority_id,
+    created_at: s.created_at, updated_at: s.updated_at, close_at: s.close_at,
+    group: s.group?.name || '', state: s.state?.name || '', priority: s.priority?.name || '',
+    customer_name: s.customer?.fullname || s.customer?.login || '-',
+    customer_phone: s.customer?.phone || '-',
+    owner_name: s.owner?.fullname || s.owner?.login || '-',
+    owner_phone: s.owner?.phone || '-'
+  };
+}
+
 app.get('/my-tickets', authMiddleware, async (req, res) => {
   try {
     const phone = req.user.phone;
     const customerId = await findZammadUserId(phone);
-
     if (!customerId) return res.json([]);
 
-    const { records } = await searchTickets({
-      'ticket.customer_id': { operator: 'is', value: customerId }
-    }, 50);
-    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    const ownerIds = [...new Set(records.map(t => t.owner_id).filter(Boolean))];
-    const userMap = {};
-    await Promise.all(ownerIds.map(async (id) => {
-      try {
-        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
-          headers: { 'Authorization': `Token token=${API_TOKEN}` }
-        });
-        const u = await r.json();
-        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
-      } catch(e) {}
-    }));
-
-    res.json(records.map(t => ({
-      ...t,
-      customer_name: t.customer || '-',
-      customer_phone: phone,
-      owner_name: (userMap[t.owner_id] || {}).name || t.owner || '-',
-      owner_phone: (userMap[t.owner_id] || {}).phone || '-'
-    })));
+    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
+    const esResp = await fetch(esUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: 50, sort: [{ created_at: { order: 'desc' } }], query: { term: { customer_id: customerId } } })
+    });
+    const esData = await esResp.json();
+    res.json((esData.hits?.hits || []).map(h => mapTicketSource(h._source)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -814,30 +812,13 @@ app.get('/my-dashboard', authMiddleware, async (req, res) => {
     const userId = await findZammadUserId(phone);
     if (!userId) return res.json([]);
 
-    const { records } = await searchTickets({
-      'ticket.owner_id': { operator: 'is', value: userId }
-    }, 50);
-    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    const customerIds = [...new Set(records.map(t => t.customer_id).filter(Boolean))];
-    const userMap = {};
-    await Promise.all(customerIds.map(async (id) => {
-      try {
-        const r = await fetch(`${ZAMMAD_URL}/api/v1/users/${id}`, {
-          headers: { 'Authorization': `Token token=${API_TOKEN}` }
-        });
-        const u = await r.json();
-        if (u.id) userMap[id] = { name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.login || '-', phone: u.phone || u.mobile || '-' };
-      } catch(e) {}
-    }));
-
-    res.json(records.map(t => ({
-      ...t,
-      customer_name: (userMap[t.customer_id] || {}).name || t.customer || '-',
-      customer_phone: (userMap[t.customer_id] || {}).phone || '-',
-      owner_name: t.owner || '-',
-      owner_phone: (userMap[userId] || {}).phone || '-'
-    })));
+    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
+    const esResp = await fetch(esUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: 50, sort: [{ created_at: { order: 'desc' } }], query: { term: { owner_id: userId } } })
+    });
+    const esData = await esResp.json();
+    res.json((esData.hits?.hits || []).map(h => mapTicketSource(h._source)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
