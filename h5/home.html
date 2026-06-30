@@ -115,6 +115,8 @@
           var t = data.title||'工单申请', g = data.group||'桌面运维', d = data.description||'';
           t = t.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
           d = d.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          var oldCard = document.getElementById('confirmCard');
+          if (oldCard) oldCard.remove();
           body.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">已为您生成工单，请确认信息：<div class="ticket-confirm" id="confirmCard"><input id="cfTitle" value="'+t+'"><select id="cfGroup"><option'+(g==='桌面运维'?' selected':'')+'>桌面运维</option><option'+(g==='网络运维'?' selected':'')+'>网络运维</option><option'+(g==='应用系统运维'?' selected':'')+'>应用系统运维</option></select><textarea id="cfDesc" rows="2">'+d+'</textarea><button class="btn-create" onclick="createTicket()">确认提交</button><button class="btn-cancel" onclick="cancelTicket()">取消</button></div></div></div>');
         } else {
           body.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant"><div class="avatar">🤖</div><div class="chat-bubble">'+(data.content||'抱歉，请换个方式描述您的问题。')+'</div></div>');
