@@ -45,10 +45,15 @@
     .typing span { width: 6px; height: 6px; background: #93c5fd; border-radius: 50%; animation: bounce 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: 0.2s; } .typing span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-    /* AI 创建进度条 */
-    .ai-progress { height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; margin: 0 auto; max-width: 200px; }
-    .ai-progress-bar { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa, #2563eb); background-size: 200% 100%; border-radius: 2px; animation: aiBar 1.5s ease-in-out infinite; }
-    @keyframes aiBar { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
+    /* AI 创建加载动画 */
+    .ai-creating { text-align: center; padding: 16px 0; }
+    .ai-spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid #dbeafe; border-radius: 50%; border-top-color: #2563eb; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ai-dots { display: inline-block; }
+    .ai-dots span { display: inline-block; width: 5px; height: 5px; background: #2563eb; border-radius: 50%; margin: 0 2px; vertical-align: middle; animation: aiDot 1.2s ease-in-out infinite; }
+    .ai-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .ai-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes aiDot { 0%,100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
   </style>
 </head>
 <body>
@@ -140,20 +145,13 @@
       var descEl = document.getElementById('cfDesc');
       if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
       var title = titleEl.value, group = groupEl.value, desc = descEl.value;
-      card.innerHTML = `<div style="text-align:center;padding:12px 0;">
-        <div class="ai-progress">
-          <div class="ai-progress-bar"></div>
-        </div>
-        <div style="margin-top:8px;font-size:13px;color:#2563eb;" id="aiStep">正在创建工单...</div>
-      </div>`;
-      var stepEl = document.getElementById('aiStep');
+      card.innerHTML = '<div class="ai-creating"><span class="ai-spinner"></span>AI 客服正在为您创建工单<div class="ai-dots"><span></span><span></span><span></span></div></div>';
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
           body: JSON.stringify({ title: title, group: group, body: desc })
         });
         if (!res.ok) { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;text-align:center;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; return; }
-        stepEl.textContent = '正在同步数据...';
         // 轮询等待 ES 索引完成
         var startCount = -1;
         for (var i = 0; i < 30; i++) {
@@ -162,11 +160,10 @@
             var cr = await fetch('/my-tickets-count', { headers: { 'Authorization': 'Bearer '+getToken() } });
             var cd = await cr.json();
             if (startCount < 0) startCount = cd.total;
-            if (cd.total > startCount) break;
+            if (cd.total > startCount) { location.href = 'list.html'; return; }
           } catch(e) {}
         }
-        stepEl.textContent = '✅ 完成';
-        setTimeout(function(){ location.href = 'list.html'; }, 300);
+        location.href = 'list.html';
       } catch(e) { card.innerHTML = '<div style="color:#ef4444;text-align:center;">网络错误: '+e.message+'</div>'; }
     }
 
