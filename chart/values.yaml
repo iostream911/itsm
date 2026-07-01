@@ -1,13 +1,13 @@
-# 镜像
+# ==========================================
+# ITSM 应用配置
+# ==========================================
 image:
   repository: harbor.szctdg.tech/itsm/itsm
-  tag: v1.2.2
+  tag: v1.2.4
   pullPolicy: Always
 
-# 副本数
 replicas: 2
 
-# 资源
 resources:
   requests:
     cpu: 100m
@@ -16,31 +16,106 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# 服务
 service:
   type: NodePort
   port: 3000
   nodePort: 30081
 
-# Ingress
 ingress:
   host: itsm.172.24.16.40.nip.io
 
-# 健康检查
 readinessProbe:
   path: /login.html
   port: 3000
   initialDelaySeconds: 5
   periodSeconds: 10
 
-# Harbor 登录密钥
 imagePullSecrets:
   - name: harbor-registry
 
-# 配置文件
 config:
   TZ: Asia/Shanghai
   ZAMMAD_URL: "http://zammad-railsserver:3000"
 
-# 密钥（基础值，实际值在 k8s secret 中）
 secrets: {}
+
+# ==========================================
+# Zammad 应用层 (railsserver, scheduler, websocket)
+# ==========================================
+zammad-app:
+  enabled: true
+  image: ghcr.io/zammad/zammad:7.0.1-0024
+  railsserver:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 1536Mi
+  scheduler:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+  websocket:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# ==========================================
+# Zammad 基础设施 (DB, Redis, Memcached, ES, PVC)
+# ==========================================
+zammad-infra:
+  enabled: true
+  postgresql:
+    image: postgres:17.9-alpine
+    storage: 10Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  redis:
+    image: redis:8.6.2-alpine
+    storage: 2Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  memcached:
+    image: memcached:1.6.41-alpine
+    maxMemory: "64M"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 96Mi
+  elasticsearch:
+    image: ghcr.io/zammad/zammad-elasticsearch:7.0.1-0024
+    javaOpts: "-Xms512m -Xmx512m"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 768Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+  storage:
+    size: 5Gi
+  backup:
+    size: 5Gi

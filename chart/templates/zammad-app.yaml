@@ -1,0 +1,203 @@
+{{- if index .Values "zammad-app" "enabled" -}}
+---
+# Zammad Railsserver
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-railsserver
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-railsserver
+  template:
+    metadata:
+      labels:
+        app: zammad-railsserver
+    spec:
+      containers:
+      - name: zammad-railsserver
+        image: {{ index .Values "zammad-app" "image" }}
+        command: ["/bin/bash", "-c"]
+        args: ["ZAMMAD_RAILSSERVER_PORT=3000 exec /docker-entrypoint.sh zammad-railsserver"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: {{ index .Values "zammad-app" "railsserver" "resources" "requests" "cpu" }}
+            memory: {{ index .Values "zammad-app" "railsserver" "resources" "requests" "memory" }}
+          limits:
+            cpu: {{ index .Values "zammad-app" "railsserver" "resources" "limits" "cpu" }}
+            memory: {{ index .Values "zammad-app" "railsserver" "resources" "limits" "memory" }}
+        readinessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          failureThreshold: 5
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-railsserver
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: zammad-railsserver
+  ports:
+  - port: 3000
+    targetPort: 3000
+---
+# Railsserver UI (NodePort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-ui
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: NodePort
+  selector:
+    app: zammad-railsserver
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30082
+---
+# Internal service for ITSM -> Zammad
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: zammad-railsserver
+  ports:
+  - port: 8080
+    targetPort: 3000
+---
+# Zammad Scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-scheduler
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-scheduler
+  template:
+    metadata:
+      labels:
+        app: zammad-scheduler
+    spec:
+      containers:
+      - name: zammad-scheduler
+        image: {{ index .Values "zammad-app" "image" }}
+        args: ["zammad-scheduler"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        resources:
+          requests:
+            cpu: {{ index .Values "zammad-app" "scheduler" "resources" "requests" "cpu" }}
+            memory: {{ index .Values "zammad-app" "scheduler" "resources" "requests" "memory" }}
+          limits:
+            cpu: {{ index .Values "zammad-app" "scheduler" "resources" "limits" "cpu" }}
+            memory: {{ index .Values "zammad-app" "scheduler" "resources" "limits" "memory" }}
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+# Zammad Websocket
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zammad-websocket
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zammad-websocket
+  template:
+    metadata:
+      labels:
+        app: zammad-websocket
+    spec:
+      containers:
+      - name: zammad-websocket
+        image: {{ index .Values "zammad-app" "image" }}
+        args: ["zammad-websocket"]
+        envFrom:
+        - configMapRef:
+            name: zammad-config
+        ports:
+        - containerPort: 6042
+        resources:
+          requests:
+            cpu: {{ index .Values "zammad-app" "websocket" "resources" "requests" "cpu" }}
+            memory: {{ index .Values "zammad-app" "websocket" "resources" "requests" "memory" }}
+          limits:
+            cpu: {{ index .Values "zammad-app" "websocket" "resources" "limits" "cpu" }}
+            memory: {{ index .Values "zammad-app" "websocket" "resources" "limits" "memory" }}
+        readinessProbe:
+          tcpSocket:
+            port: 6042
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 5
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/zammad/storage
+        - name: backup
+          mountPath: /var/tmp/zammad
+          readOnly: true
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: zammad-storage-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: zammad-backup-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zammad-websocket
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: zammad-websocket
+  ports:
+  - port: 6042
+    targetPort: 6042
+{{- end }}
