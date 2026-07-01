@@ -121,6 +121,7 @@
 
     const statusMap = { 1: ['待处理', 'status-new'], 2: ['已打开', 'status-open'], 3: ['待提醒', 'status-pending'], 4: ['已关闭', 'status-closed'], 5: ['已合并', 'status-closed'], 6: ['待关闭', 'status-pending'] };
     let allTickets = [], currentFilter = 'open', now = Date.now();
+    let pendingChanges = {}; // 本地修改记录，后台 reload 时保留
 
     document.getElementById('statsCards').addEventListener('click', e => {
       const item = e.target.closest('.stat-item');
@@ -134,6 +135,11 @@
         const res = await apiFetch('/my-dashboard');
         const data = await res.json();
         allTickets = Array.isArray(data) ? data : [];
+        // 合并本地修改：后台 reload 时保留刚操作过的工单状态
+        Object.keys(pendingChanges).forEach(function(id){
+          var t = allTickets.find(function(x){return x.id===parseInt(id);});
+          if (t) Object.assign(t, pendingChanges[id]);
+        });
         now = Date.now();
         renderList(); updateStats();
       } catch (e) { if (e.message==='登录已过期') return; }
@@ -261,12 +267,14 @@
       if (!confirm(`确定${action==='close'?'关闭':'重新打开'}吗？`)) return;
       await apiFetch(`/api/v1/tickets/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state_id:action==='close'?4:2}) });
       document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow='';
-      // 立即更新本地数据，不等待 ES 索引
+      // 立即更新本地数据
+      var newState = action==='close' ? 4 : 2;
       var t = allTickets.find(function(x){return x.id===id;});
-      if (t) t.state_id = action==='close' ? 4 : 2;
+      if (t) t.state_id = newState;
+      pendingChanges[id] = { state_id: newState };
       renderList(); updateStats();
-      // 后台从 ES 同步最新数据
-      setTimeout(function(){ loadDashboard(); }, 2000);
+      // 后台同步，ES 追上来后清除本地修改
+      setTimeout(function(){ loadDashboard(); delete pendingChanges[id]; }, 5000);
     }
 
     async function sendReply(ticketId) {
