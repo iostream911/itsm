@@ -800,9 +800,9 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
       }).catch(e => console.log('[分配] 邮件发送失败:', e.message));
     }
 
+    // 先刷新 ES，再响应，确保前端拿到最新状态
+    if (ticketRes.ok) await fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
     res.status(ticketRes.status).json(data);
-    // 强制刷新 ES，让前端刷新时能看到最新状态
-    if (ticketRes.ok) fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
