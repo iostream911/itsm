@@ -45,6 +45,10 @@
     .typing span { width: 6px; height: 6px; background: #93c5fd; border-radius: 50%; animation: bounce 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: 0.2s; } .typing span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+    /* AI 创建进度条 */
+    .ai-progress { height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; margin: 0 auto; max-width: 200px; }
+    .ai-progress-bar { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa, #2563eb); background-size: 200% 100%; border-radius: 2px; animation: aiBar 1.5s ease-in-out infinite; }
+    @keyframes aiBar { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
   </style>
 </head>
 <body>
@@ -136,15 +140,34 @@
       var descEl = document.getElementById('cfDesc');
       if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
       var title = titleEl.value, group = groupEl.value, desc = descEl.value;
-      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
+      card.innerHTML = `<div style="text-align:center;padding:12px 0;">
+        <div class="ai-progress">
+          <div class="ai-progress-bar"></div>
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:#2563eb;" id="aiStep">正在创建工单...</div>
+      </div>`;
+      var stepEl = document.getElementById('aiStep');
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
           body: JSON.stringify({ title: title, group: group, body: desc })
         });
-        if (res.ok) { location.href = 'list.html'; }
-        else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }
-      } catch(e) { card.innerHTML = '<div style="color:#ef4444;">网络错误: '+e.message+'</div>'; }
+        if (!res.ok) { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;text-align:center;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; return; }
+        stepEl.textContent = '正在同步数据...';
+        // 轮询等待 ES 索引完成
+        var startCount = -1;
+        for (var i = 0; i < 30; i++) {
+          await new Promise(function(r){setTimeout(r,300);});
+          try {
+            var cr = await fetch('/my-tickets-count', { headers: { 'Authorization': 'Bearer '+getToken() } });
+            var cd = await cr.json();
+            if (startCount < 0) startCount = cd.total;
+            if (cd.total > startCount) break;
+          } catch(e) {}
+        }
+        stepEl.textContent = '✅ 完成';
+        setTimeout(function(){ location.href = 'list.html'; }, 300);
+      } catch(e) { card.innerHTML = '<div style="color:#ef4444;text-align:center;">网络错误: '+e.message+'</div>'; }
     }
 
     function cancelTicket() { document.getElementById('confirmCard').innerHTML = '<div style="color:#9ca3af;">已取消</div>'; }
