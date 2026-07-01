@@ -716,10 +716,10 @@ app.post('/my-tickets', authMiddleware, async (req, res) => {
     // 自动派单（异步，不阻塞响应）
     const ticketId = data.id;
     const ticketNumber = data.number;
+    // 先刷新 ES（不等 autoAssign），让前端轮询尽快看到新工单
+    fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
     autoAssign(ticketId, group || '桌面运维').then(agent => {
       if (agent) console.log(`[派单] 工单 #${ticketNumber} 已自动分配给 ${agent.email}`);
-      // 强制刷新 ES，让新工单立即可搜
-      fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
     });
 
     res.json(data);
