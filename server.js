@@ -131,6 +131,21 @@ app.get('/my-dashboard-count', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// 管理看板工单列表（按创建时间倒序，新工单在前）
+app.get('/api/v1/tickets-sorted', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.per_page) || 15;
+    const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Token token=${API_TOKEN}` },
+      body: JSON.stringify({ limit: perPage, offset: (page - 1) * perPage, sort_by: 'created_at', order_by: 'desc', expand: true })
+    });
+    const data = await resp.json();
+    res.json(data.records || (Array.isArray(data) ? data : []));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // 全部运维人员列表（Zammad 按 role_ids 搜索，秒出）
 app.get('/api/v1/agents', async (req, res) => {
   try {
