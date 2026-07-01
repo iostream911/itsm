@@ -106,7 +106,7 @@ zammad-infra:
         cpu: 100m
         memory: 96Mi
   elasticsearch:
-    image: ghcr.io/zammad/zammad-elasticsearch:7.0.1-0024
+    image: harbor.szctdg.tech/itsm/elasticsearch:7.17.25
     javaOpts: "-Xms512m -Xmx512m"
     resources:
       requests:

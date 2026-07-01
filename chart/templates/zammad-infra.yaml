@@ -268,6 +268,13 @@ spec:
           limits:
             cpu: {{ index .Values "zammad-infra" "elasticsearch" "resources" "limits" "cpu" }}
             memory: {{ index .Values "zammad-infra" "elasticsearch" "resources" "limits" "memory" }}
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/elasticsearch/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: zammad-elasticsearch-pvc
 ---
 apiVersion: v1
 kind: Service
