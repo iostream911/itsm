@@ -158,6 +158,19 @@ app.get('/api/v1/agents', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// 工单详情（ticket + articles 合并，减少外网往返）
+app.get('/api/v1/ticket-detail/:id', async (req, res) => {
+  try {
+    const headers = { 'Authorization': `Token token=${API_TOKEN}` };
+    const [tRes, aRes] = await Promise.all([
+      fetch(`${ZAMMAD_URL}/api/v1/tickets/${req.params.id}?expand=true`, { headers }),
+      fetch(`${ZAMMAD_URL}/api/v1/ticket_articles/by_ticket/${req.params.id}`, { headers })
+    ]);
+    const [ticket, articles] = await Promise.all([tRes.json(), aRes.json()]);
+    res.json({ ticket, articles: Array.isArray(articles) ? articles : [] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── 内存用户存储（生产环境换成数据库）──
 const users = {};           // phone -> { phone, name, zammadId, createdAt }
 const verifyCodes = {};     // phone -> { code, expiresAt }

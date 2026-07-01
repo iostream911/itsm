@@ -218,8 +218,9 @@
       var ownerName = cached ? cached.owner_name : '-';
       var ownerPhone = cached ? cached.owner_phone : '-';
       try {
-        const [tRes,aRes] = await Promise.all([apiFetch(`/api/v1/tickets/${id}?expand=true`), apiFetch(`/api/v1/ticket_articles/by_ticket/${id}`)]);
-        const ticket = await tRes.json(); const articles = await aRes.json();
+        const res = await apiFetch(`/api/v1/ticket-detail/${id}`);
+        const data = await res.json();
+        const ticket = data.ticket; const articles = data.articles;
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         const [label] = statusMap[ticket.state_id]||['未知'];
         var hasOwner = ticket.owner_id && ownerName !== '-';

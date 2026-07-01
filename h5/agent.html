@@ -169,8 +169,9 @@
       document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;">加载中...</div>';
       document.body.style.overflow='hidden';
       try {
-        const [tRes,aRes] = await Promise.all([apiFetch(`/api/v1/tickets/${id}?expand=true`), apiFetch(`/api/v1/ticket_articles/by_ticket/${id}`)]);
-        const ticket = await tRes.json(); const articles = await aRes.json();
+        const res = await apiFetch(`/api/v1/ticket-detail/${id}`);
+        const data = await res.json();
+        const ticket = data.ticket; const articles = data.articles;
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         const [label] = statusMap[ticket.state_id]||['未知'];
         document.getElementById('modalContent').innerHTML = `

@@ -327,11 +327,9 @@
       // 从列表缓存获取 owner 信息，避免额外 API 调用
       var cached = allTicketsCache.find(function(t){return t.id===id;});
       try {
-        const [tRes,aRes] = await Promise.all([
-          fetch(`${API}/tickets/${id}?expand=true`,{headers:{}}).then(r=>r.json()),
-          fetch(`${API}/ticket_articles/by_ticket/${id}`,{headers:{}}).then(r=>r.json())
-        ]);
-        const ticket = tRes; const articles = aRes;
+        const res = await fetch(`${API}/ticket-detail/${id}`,{headers:{}});
+        const data = await res.json();
+        const ticket = data.ticket; const articles = data.articles;
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         const [label] = Object.entries(statusMap).find(([k])=>k==ticket.state_id)||['未知',''];
         const oName = cached ? cached.owner_name : '-';
