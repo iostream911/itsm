@@ -1,5 +1,7 @@
 # Harbor 代理缓存使用说明
 
+> 最后更新: 2026-07-01
+
 ## 架构
 
 ```
@@ -11,9 +13,9 @@ socat 中继 (systemd: harbor-proxy-relay)
     ↓ → 127.0.0.1:16893
 SSH 反向隧道 (Mac → Harbor, 端口 16893)
     ↓ → Mac 127.0.0.1:16893
-gost HTTP→SOCKS5 桥接 (Mac 端口 16893)
-    ↓ → 127.0.0.1:16891
-byx-core SOCKS5 (Mac 端口 16891)
+gost HTTP→HTTP 桥接 (Mac 端口 16893)
+    ↓ → 127.0.0.1:7990
+淘气兔 VPN HTTP 代理 (Mac 端口 7990)
     ↓
 Docker Hub / quay.io / registry.k8s.io / 外网
 ```
@@ -36,9 +38,13 @@ Docker Hub / quay.io / registry.k8s.io / 外网
 
 | 组件 | 位置 | 说明 |
 |------|------|------|
-| Harbor | 172.24.10.8 | 已配 HTTP_PROXY |
-| socat 中继 | `harbor-proxy-relay` (systemd，开机自启) | 转发容器流量到 SSH 隧道 |
-| SSH 隧道 | Mac → Harbor，端口 16893 | 需手动启动 |
+| Harbor | 172.24.10.8 | core/jobservice 已配 HTTP_PROXY，registry 手动添加 |
+| socat 中继 | `harbor-proxy-relay` (systemd，开机自启) | Harbor 宿主机 16894 → 127.0.0.1:16893 |
+| SSH 隧道 | Mac → Harbor | `ssh -R 16893:127.0.0.1:16893`（Mac 端执行） |
+| gost 桥接 | Mac 端口 16893 → 7990 | HTTP→HTTP 转发 |
+| 淘气兔 VPN | Mac 端口 7990 | HTTP 代理，出墙 |
+| Docker 代理 | Harbor 宿主机 `/etc/systemd/system/docker.service.d/http-proxy.conf` | 用于 `docker build`/`docker pull` |
+| Harbor Registry 代理 | `/root/harbor/harbor/docker-compose.yml` | registry 容器添加 HTTP_PROXY |
 | k3s 认证 | `/etc/rancher/k3s/registries.yaml` | 全局 robot 账户 |
 | 机器人账户 | `robot$global-puller` | 所有项目拉取权限 |
 
@@ -83,22 +89,65 @@ crictl pull harbor.szctdg.tech/k8s-proxy/ingress-nginx/controller:v1.12.0
 
 ## 维护
 
-### 启动 Mac 隧道
+### 启动步骤（Mac 开机后按顺序执行）
 
-每次 Mac 开机后执行一次：
+**1. 确保淘气兔 VPN 已连接**（端口 7990）
 
+**2. 启动 gost 桥接**（Mac 上）：
+```bash
+/tmp/gost -L http://127.0.0.1:16893 -F http://127.0.0.1:7990 &
+```
+
+**3. 建立 SSH 隧道**（Mac 上）：
 ```bash
 sshpass -p '@Yangren930924' ssh -T -o StrictHostKeyChecking=no -fN \
   -o ServerAliveInterval=30 \
   -R 16893:127.0.0.1:16893 root@172.24.10.8
 ```
 
-### 检查隧道
+### 验证链路
 
+**Mac 端测试**：
 ```bash
-# 在 Harbor 上执行
-curl -s --max-time 5 -x http://127.0.0.1:16893 https://registry-1.docker.io/v2/ -I
+curl -s --max-time 10 -x http://127.0.0.1:16893 https://registry-1.docker.io/v2/ -I
 # 正常：HTTP/2 401
+```
+
+**Harbor 端测试**：
+```bash
+curl -s --max-time 10 -x http://127.0.0.1:16894 https://registry-1.docker.io/v2/ -I
+# 正常：HTTP/1.1 401 Unauthorized
+```
+
+**Docker pull 测试**：
+```bash
+docker pull docker.io/library/alpine:latest
+# 正常：下载成功
+```
+
+### 故障排查
+
+| 问题 | 检查 |
+|------|------|
+| Harbor 端 503 | gost 没启动，或淘气兔端口变了 |
+| Harbor 端 502 | Harbor 代理端点 unhealthy，等 5 分钟健康检查 |
+| Docker pull EOF | SSH 隧道断开，重新执行步骤 3 |
+| 构建卡住 | `ENV HTTP_PROXY` 没设，Dockerfile 里需要加上 |
+
+### Docker 代理配置
+
+Harbor 宿主机 `/etc/systemd/system/docker.service.d/http-proxy.conf`：
+```ini
+[Service]
+Environment="HTTP_PROXY=http://172.18.0.1:16894"
+Environment="HTTPS_PROXY=http://172.18.0.1:16894"
+Environment="NO_PROXY=localhost,127.0.0.1,172.24.10.8,harbor.szctdg.tech"
+```
+
+Dockerfile 中确保容器内也走代理：
+```dockerfile
+ENV HTTP_PROXY=http://172.18.0.1:16894
+ENV HTTPS_PROXY=http://172.18.0.1:16894
 ```
 
 ### 检查 socat 中继
@@ -139,9 +188,25 @@ configs:
 
 ---
 
+## 2026-07-01 修复记录
+
+**问题**：Harbor 代理缓存不可用，无法拉取外网镜像和下载 ES 插件。
+
+**原因**：
+1. 旧 VPN（byx-core）已停用，gost 指向的 16891 端口失效
+2. SSH 隧道断开
+3. Harbor registry 容器没有代理配置
+
+**修复步骤**：
+1. 找到新 VPN 端口：淘气兔 `127.0.0.1:7990`
+2. 重启 gost：`/tmp/gost -L http://127.0.0.1:16893 -F http://127.0.0.1:7990`
+3. 重建 SSH 隧道：`ssh -R 16893:127.0.0.1:16893 root@172.24.10.8`
+4. 配置 Docker 代理：`/etc/systemd/system/docker.service.d/http-proxy.conf`
+5. 配置 Harbor registry 代理：修改 `docker-compose.yml` 添加 `HTTP_PROXY`
+6. 验证：`docker pull alpine` 成功
+
 ## 已知限制
 
-- Harbor Proxy Cache 的 URL 格式 `/v2/<project>/<image>` 与 Docker 默认 `/v2/<image>` 不兼容
-- 无法像传统 registry mirror 那样透明代理（`docker pull nginx` → 自动走 Harbor）
-- 需要显式使用 `harbor.szctdg.tech/<proxy-project>/...` 路径
-- Mac 必须开着隧道才能从 Harbor 首次拉取新镜像，已缓存的镜像不受影响
+- Harbor Proxy Cache 的 URL 格式与 Docker 默认不兼容，需显式使用 `harbor.szctdg.tech/<proxy-project>/...`
+- Mac 必须开着隧道和淘气兔 VPN，Docker build 需 `ENV HTTP_PROXY`
+- Harbor 代理端点 health check 每 5 分钟一次，隧道恢复后最多等 5 分钟
