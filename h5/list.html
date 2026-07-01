@@ -148,6 +148,11 @@
         const countData = await countRes.json();
         totalCount = countData.total || allTickets.length;
         updateStats(); renderTickets();
+        // 如果是从提交页跳过来的，检查新工单是否已显示（ES 索引延迟）
+        var newId = new URLSearchParams(location.search).get('new');
+        if (newId && !allTickets.find(function(t){return String(t.id)===newId;})) {
+          setTimeout(function(){ loadTickets(); }, 2000);
+        }
       } catch (err) { if (err.message==='登录已过期') return; }
     }
 

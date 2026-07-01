@@ -144,7 +144,8 @@
         const data = await res.json();
         resultDiv.className = 'result success';
         resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在跳转...</div>`;
-        setTimeout(() => { location.href = 'list.html'; }, 1500);
+        // 等 ES 索引完成再跳转（约需 2-3s，留 3s 余量）
+        setTimeout(() => { location.href = 'list.html?new=' + (data.id||''); }, 3000);
         document.getElementById('category').value = '桌面运维';
         document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.toggle('selected', t.dataset.value === '桌面运维'));
       } catch (err) {
