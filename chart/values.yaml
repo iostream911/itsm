@@ -6,15 +6,15 @@ image:
   tag: v1.2.4
   pullPolicy: Always
 
-replicas: 2
+replicas: 3
 
 resources:
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 1
+    memory: 1Gi
 
 service:
   type: NodePort
@@ -46,29 +46,34 @@ zammad-app:
   enabled: true
   image: ghcr.io/zammad/zammad:7.0.1-0024
   railsserver:
+    replicas: 3
+    workers: 4        # WEB_CONCURRENCY，每个 Pod 的 Puma worker 数
+    maxThreads: 16    # 每个 worker 的线程数
+    dbPool: 80        # DATABASE_POOL，匹配总线程数
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 3Gi
+  scheduler:
     resources:
       requests:
         cpu: 100m
-        memory: 384Mi
+        memory: 512Mi
       limits:
         cpu: 500m
-        memory: 1536Mi
-  scheduler:
+        memory: 1Gi
+  websocket:
+    replicas: 2
     resources:
       requests:
         cpu: 50m
         memory: 256Mi
       limits:
-        cpu: 300m
+        cpu: 500m
         memory: 512Mi
-  websocket:
-    resources:
-      requests:
-        cpu: 20m
-        memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
 
 # ==========================================
 # Zammad 基础设施 (DB, Redis, Memcached, ES, PVC)
@@ -80,41 +85,41 @@ zammad-infra:
     storage: 10Gi
     resources:
       requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
+        cpu: 200m
         memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
   redis:
     image: redis:8.6.2-alpine
     storage: 2Gi
     resources:
       requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 200m
+        cpu: 100m
         memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
   memcached:
     image: memcached:1.6.41-alpine
-    maxMemory: "64M"
+    maxMemory: "256M"
     resources:
       requests:
         cpu: 10m
-        memory: 32Mi
+        memory: 64Mi
       limits:
-        cpu: 100m
-        memory: 96Mi
+        cpu: 200m
+        memory: 256Mi
   elasticsearch:
     image: harbor.szctdg.tech/itsm/elasticsearch:7.17.25
-    javaOpts: "-Xms512m -Xmx512m"
+    javaOpts: "-Xms1g -Xmx1g"
     resources:
       requests:
-        cpu: 100m
-        memory: 768Mi
-      limits:
-        cpu: 500m
+        cpu: 200m
         memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 2Gi
   storage:
     size: 5Gi
   backup:
