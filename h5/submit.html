@@ -143,11 +143,21 @@
         if (!res.ok) { const err = await res.json(); throw new Error(err.error || '提交失败'); }
         const data = await res.json();
         resultDiv.className = 'result success';
-        resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在跳转...</div>`;
-        // 等 ES 索引完成再跳转（约需 2-3s，留 3s 余量）
-        setTimeout(() => { location.href = 'list.html?new=' + (data.id||''); }, 3000);
+        resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在同步...</div>`;
         document.getElementById('category').value = '桌面运维';
         document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.toggle('selected', t.dataset.value === '桌面运维'));
+        // 轮询等待 ES 索引完成，确认后再跳转
+        var startCount = -1;
+        for (var i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 500));
+          try {
+            var cr = await apiFetch('/my-tickets-count');
+            var cd = await cr.json();
+            if (startCount < 0) startCount = cd.total;
+            if (cd.total > startCount) { location.href = 'list.html'; return; }
+          } catch(e) {}
+        }
+        location.href = 'list.html';
       } catch (err) {
         if (err.message === '登录已过期') return;
         resultDiv.className = 'result error';
