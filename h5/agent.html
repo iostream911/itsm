@@ -255,7 +255,13 @@
           alert('转派成功');
           document.getElementById('modalOverlay').style.display = 'none';
           document.body.style.overflow = '';
-          loadDashboard();
+          // 立即更新本地数据
+          var t = allTickets.find(function(x){return x.id===ticketId;});
+          if (t) { t.owner_id = newOwnerId; if (newGroup) t.group = newGroup; }
+          pendingChanges[ticketId] = { owner_id: newOwnerId };
+          if (newGroup) pendingChanges[ticketId].group = newGroup;
+          renderList(); updateStats();
+          setTimeout(function(){ loadDashboard(); delete pendingChanges[ticketId]; }, 5000);
         } else {
           const err = await res.json().catch(() => ({}));
           alert('转派失败: ' + (err.error || '未知错误'));
