@@ -17,7 +17,7 @@ spec:
       - name: harbor-registry
       containers:
       - name: itsm
-        image: harbor.szctdg.tech/itsm/itsm:v1.2.2
+        image: harbor.szctdg.tech/itsm/itsm:v1.2.4
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
