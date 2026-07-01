@@ -477,15 +477,11 @@ app.post('/auth/login', async (req, res) => {
 // ── 获取当前用户信息 + 刷新 Token ──
 app.get('/auth/me', authMiddleware, async (req, res) => {
   const u = users[req.user.phone];
-  // 同步 Zammad 角色，但如果 Zammad 不可达，保留用户原有高权限角色
+  // 每次验证时同步 Zammad 角色和分组
   const info = await fetchZammadUserInfo(req.user.phone);
-  let role = info.role;
-  if (u && u.role && (u.role === 'admin' || u.role === 'agent') && info.role === 'customer') {
-    role = u.role; // Zammad 不可达时保留原有角色，不降级为 customer
-  }
-  if (u) { u.role = role; u.groups = info.groups || u.groups; if (info.name) u.name = info.name; }
-  const token = signToken({ phone: req.user.phone, role });
-  res.json({ phone: req.user.phone, role, groups: info.groups || u?.groups, name: u?.name || info.name || req.user.phone, token });
+  if (u) { u.role = info.role; u.groups = info.groups; if (info.name) u.name = info.name; }
+  const token = signToken({ phone: req.user.phone, role: info.role });
+  res.json({ phone: req.user.phone, role: info.role, groups: info.groups, name: u?.name || info.name || req.user.phone, token });
 });
 
 // ── 获取当前用户的工单列表 ──
