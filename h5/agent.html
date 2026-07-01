@@ -261,6 +261,7 @@
       if (!confirm(`确定${action==='close'?'关闭':'重新打开'}吗？`)) return;
       await apiFetch(`/api/v1/tickets/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state_id:action==='close'?4:2}) });
       document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow='';
+      await new Promise(r => setTimeout(r, 500));
       loadDashboard();
     }
 

@@ -801,6 +801,8 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
     }
 
     res.status(ticketRes.status).json(data);
+    // 强制刷新 ES，让前端刷新时能看到最新状态
+    if (ticketRes.ok) fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
