@@ -213,13 +213,16 @@
       document.getElementById('modalOverlay').style.display='flex';
       document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;"><span class="pull-spinner"></span></div>';
       document.body.style.overflow='hidden';
+      // 从列表缓存获取 owner 信息，避免额外 API 调用
+      var cached = allTickets.find(function(t){return t.id===id;});
+      var ownerName = cached ? cached.owner_name : '-';
+      var ownerPhone = cached ? cached.owner_phone : '-';
       try {
         const [tRes,aRes] = await Promise.all([apiFetch(`/api/v1/tickets/${id}?expand=true`), apiFetch(`/api/v1/ticket_articles/by_ticket/${id}`)]);
         const ticket = await tRes.json(); const articles = await aRes.json();
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-        let ownerInfo = null;
-        if (ticket.owner_id) { try { const oRes=await apiFetch(`/api/v1/users/${ticket.owner_id}`); ownerInfo=await oRes.json(); } catch(e){} }
         const [label] = statusMap[ticket.state_id]||['未知'];
+        var hasOwner = ticket.owner_id && ownerName !== '-';
         document.getElementById('modalContent').innerHTML = `
           <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>
           <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${label}</span></div>
@@ -228,7 +231,7 @@
           <div class="detail-row"><span class="detail-label">创建</span><span class="detail-value">${new Date(ticket.created_at).toLocaleString('zh-CN')}</span></div>
           ${ticket.close_at?`<div class="detail-row"><span class="detail-label">关闭</span><span class="detail-value">${new Date(ticket.close_at).toLocaleString('zh-CN')}</span></div>`:''}
           <hr class="detail-divider"><div class="section-title">处理人</div>
-          ${ownerInfo?`<div class="handler-card"><div class="handler-avatar">${(ownerInfo.firstname||'?')[0]}</div><div class="handler-info"><div class="handler-name">${ownerInfo.firstname||''} ${ownerInfo.lastname||''}</div><div class="handler-contact">${[ownerInfo.email,ownerInfo.phone,ownerInfo.mobile].filter(Boolean).join(' · ')||'暂无联系方式'}</div></div></div>`:'<div class="handler-card" style="color:#9ca3af;justify-content:center;">暂未分配</div>'}
+          ${hasOwner?`<div class="handler-card"><div class="handler-avatar">${ownerName[0]}</div><div class="handler-info"><div class="handler-name">${ownerName}</div><div class="handler-contact">${ownerPhone!=='-'?'📞 '+ownerPhone:'暂无联系方式'}</div></div></div>`:'<div class="handler-card" style="color:#9ca3af;justify-content:center;">暂未分配</div>'}
           <hr class="detail-divider"><div class="section-title">沟通记录</div>
           ${list.length===0?'<div style="color:#9ca3af;text-align:center;padding:20px;">暂无回复</div>':list.map(a=>`<div class="article-item"><div class="article-header"><span class="article-author">${a.sender==='Customer'?'我':(a.from||a.created_by||'IT支持')}</span><span class="article-time">${new Date(a.created_at).toLocaleString('zh-CN')}</span></div><div class="article-body">${(a.body||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div>`).join('')}
           ${[4,5].includes(ticket.state_id) ? '' : `

@@ -324,6 +324,8 @@
       document.getElementById('modalOverlay').style.display='flex';
       document.getElementById('modalContent').innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div>';
       document.body.style.overflow='hidden';
+      // 从列表缓存获取 owner 信息，避免额外 API 调用
+      var cached = allTicketsCache.find(function(t){return t.id===id;});
       try {
         const [tRes,aRes] = await Promise.all([
           fetch(`${API}/tickets/${id}?expand=true`,{headers:{}}).then(r=>r.json()),
@@ -331,9 +333,10 @@
         ]);
         const ticket = tRes; const articles = aRes;
         const list = (Array.isArray(articles)?articles:[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-        let ownerInfo = null;
-        if (ticket.owner_id>1) { try { ownerInfo=await fetch(`${API}/users/${ticket.owner_id}`,{headers:{}}).then(r=>r.json()); } catch(e){} }
         const [label] = Object.entries(statusMap).find(([k])=>k==ticket.state_id)||['未知',''];
+        const oName = cached ? cached.owner_name : '-';
+        const oPhone = cached ? cached.owner_phone : '-';
+        const hasOwner = ticket.owner_id > 1 && oName !== '-';
         document.getElementById('modalContent').innerHTML = `
           <div class="detail-number">#${ticket.number}</div><div class="detail-title">${ticket.title}</div>
           <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value">${label}</span></div>
@@ -343,7 +346,7 @@
           <div class="detail-row"><span class="detail-label">创建</span><span class="detail-value">${new Date(ticket.created_at).toLocaleString('zh-CN')}</span></div>
           ${ticket.close_at?`<div class="detail-row"><span class="detail-label">关闭</span><span class="detail-value">${new Date(ticket.close_at).toLocaleString('zh-CN')}</span></div>`:''}
           <hr class="detail-divider"><div class="section-title">处理人</div>
-          ${ownerInfo?`<div style="background:#f9fafb;border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;"><div style="width:40px;height:40px;border-radius:20px;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;">${(ownerInfo.firstname||'?')[0]}</div><div><div style="font-weight:500;">${ownerInfo.firstname||''} ${ownerInfo.lastname||''}</div><div style="font-size:12px;color:#6b7280;">${[ownerInfo.email,ownerInfo.phone].filter(Boolean).join(' · ')||'暂无联系方式'}</div></div></div>`:'<div style="color:#9ca3af;text-align:center;padding:16px;">暂未分配处理人</div>'}
+          ${hasOwner?`<div style="background:#f9fafb;border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;"><div style="width:40px;height:40px;border-radius:20px;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;">${(oName||'?')[0]}</div><div><div style="font-weight:500;">${oName}</div><div style="font-size:12px;color:#6b7280;">${oPhone!=='-'?'📞 '+oPhone:'暂无联系方式'}</div></div></div>`:'<div style="color:#9ca3af;text-align:center;padding:16px;">暂未分配处理人</div>'}
           <hr class="detail-divider"><div class="section-title">沟通记录</div>
           ${list.length===0?'<div style="color:#9ca3af;text-align:center;padding:16px;">暂无</div>':list.map(a=>`<div class="article-item"><div class="article-header"><span class="article-author">${a.sender==='Customer'?'客户':(a.from||a.created_by||'系统')}</span><span class="article-time">${new Date(a.created_at).toLocaleString('zh-CN')}</span></div><div class="article-body">${(a.body||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div></div>`).join('')}
         `;
