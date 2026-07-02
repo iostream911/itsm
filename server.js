@@ -486,31 +486,19 @@ app.get('/auth/me', authMiddleware, async (req, res) => {
 
 // ── 获取当前用户的工单列表 ──
 // ── 按手机号查找 Zammad 用户 ID ──
-const userCache = new Map(); // phone → { id, time }
 async function findZammadUserId(phone) {
-  // 方式1: Zammad 搜索 API（依赖 ES，ES 故障时不可用）
-  try {
-    const candidates = await fetch(
-      `${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone)}&limit=10`,
-      { headers: { 'Authorization': `Token token=${API_TOKEN}` } }
-    );
-    const list = await candidates.json();
-    if (Array.isArray(list)) {
-      const match = list.find(u => u.phone === phone);
-      if (match) { userCache.set(phone, { id: match.id, time: Date.now() }); return match.id; }
-    }
-  } catch(e) {}
-  // 方式2: 内存缓存
-  const cached = userCache.get(phone);
-  if (cached && Date.now() - cached.time < 3600000) return cached.id;
-  // 方式3: 全量加载（兜底，慢但可靠）
-  try {
-    const allUsers = await fetchAll(`${ZAMMAD_URL}/api/v1/users`);
-    for (const u of allUsers) {
-      userCache.set(u.phone || '', { id: u.id, time: Date.now() });
-      if (u.phone === phone) return u.id;
-    }
-  } catch(e) {}
+  const candidates = await fetch(
+    `${ZAMMAD_URL}/api/v1/users/search?query=${encodeURIComponent(phone)}&limit=10`,
+    { headers: { 'Authorization': `Token token=${API_TOKEN}` } }
+  );
+  const list = await candidates.json();
+  if (Array.isArray(list)) {
+    const match = list.find(u => u.phone === phone);
+    if (match) return match.id;
+    // 退而求其次：邮箱匹配
+    const emailMatch = list.find(u => u.email === `${phone}@it.local`);
+    if (emailMatch) return emailMatch.id;
+  }
   return null;
 }
 
@@ -716,8 +704,6 @@ app.post('/my-tickets', authMiddleware, async (req, res) => {
     // 自动派单（异步，不阻塞响应）
     const ticketId = data.id;
     const ticketNumber = data.number;
-    // 先刷新 ES（不等 autoAssign），让前端轮询尽快看到新工单
-    fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
     autoAssign(ticketId, group || '桌面运维').then(agent => {
       if (agent) console.log(`[派单] 工单 #${ticketNumber} 已自动分配给 ${agent.email}`);
     });
@@ -800,8 +786,6 @@ app.put('/api/v1/tickets/:id', async (req, res) => {
       }).catch(e => console.log('[分配] 邮件发送失败:', e.message));
     }
 
-    // 先刷新 ES，再响应，确保前端拿到最新状态
-    if (ticketRes.ok) await fetch('http://zammad-elasticsearch:9200/zammad_production_production_ticket/_refresh', { method: 'POST' }).catch(()=>{});
     res.status(ticketRes.status).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

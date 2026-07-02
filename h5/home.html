@@ -45,22 +45,6 @@
     .typing span { width: 6px; height: 6px; background: #93c5fd; border-radius: 50%; animation: bounce 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: 0.2s; } .typing span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-    /* AI 创建加载动画 */
-    .ai-creating { text-align: center; padding: 16px 0; }
-    .ai-creating .icon-row { margin-bottom: 10px; }
-    .ai-spinner { display: inline-block; width: 22px; height: 22px; border: 2.5px solid #dbeafe; border-radius: 50%; border-top-color: #2563eb; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .ai-creating .text { font-size: 14px; color: #1e40af; font-weight: 500; }
-    .ai-creating .sub { font-size: 11px; color: #93c5fd; margin-top: 4px; }
-    /* 进度条 */
-    .ai-bar-wrap { margin-top: 14px; padding: 0 12px; }
-    .ai-bar-outer { height: 6px; background: #e0e7ff; border-radius: 3px; overflow: hidden; position: relative; }
-    .ai-bar-inner { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, #2563eb, #6366f1, #8b5cf6, #a78bfa); background-size: 300% 100%; animation: aiFill 2.5s cubic-bezier(0.4,0,0.2,1) forwards, aiShimmer 1.2s ease-in-out infinite; position: relative; }
-    .ai-bar-inner::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: aiGlow 1s ease-in-out infinite; }
-    @keyframes aiFill { 0% { width: 0%; } 30% { width: 35%; } 60% { width: 72%; } 100% { width: 100%; } }
-    @keyframes aiShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
-    @keyframes aiGlow { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
-    .ai-percent { text-align: right; font-size: 11px; color: #6366f1; margin-top: 4px; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -144,16 +128,6 @@
       body.scrollTop = body.scrollHeight;
     }
 
-    function aiProgressHtml(pct, text, sub) {
-      return '<div class="ai-creating">' +
-        '<div class="icon-row"><span class="ai-spinner"></span></div>' +
-        '<div class="text">' + text + '</div>' +
-        (sub ? '<div class="sub">' + sub + '</div>' : '') +
-        '<div class="ai-bar-wrap"><div class="ai-bar-outer"><div class="ai-bar-inner" style="animation-duration:' + (2.5 - pct/60) + 's"></div></div></div>' +
-        '<div class="ai-percent" id="aiPct">' + pct + '%</div>' +
-        '</div>';
-    }
-
     async function createTicket() {
       var card = document.getElementById('confirmCard');
       if (!card) return;
@@ -162,44 +136,15 @@
       var descEl = document.getElementById('cfDesc');
       if (!titleEl || !groupEl || !descEl) { card.innerHTML = '<div style="color:#ef4444;">表单数据丢失，请重新生成工单</div>'; return; }
       var title = titleEl.value, group = groupEl.value, desc = descEl.value;
-      card.innerHTML = aiProgressHtml(0, 'AI 客服正在为您创建工单...', '正在进行智能分析');
-      var pctEl = document.getElementById('aiPct');
-      // 进度 0→70%
-      var tick = setInterval(function(){
-        var cur = parseInt(pctEl.textContent) || 0;
-        if (cur >= 70) { clearInterval(tick); return; }
-        pctEl.textContent = Math.min(cur + Math.ceil((70-cur)/5), 70) + '%';
-      }, 300);
+      card.innerHTML = '<div style="text-align:center;color:#2563eb;">提交中...</div>';
       try {
         var res = await fetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+getToken() },
           body: JSON.stringify({ title: title, group: group, body: desc })
         });
-        clearInterval(tick);
-        if (!res.ok) { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;text-align:center;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; return; }
-        // 进度 70→100%
-        pctEl.textContent = '70%';
-        card.querySelector('.ai-bar-inner').style.animationDuration = '1s';
-        var aniTick = setInterval(function(){
-          var cur = parseInt(pctEl.textContent) || 70;
-          if (cur >= 100) { clearInterval(aniTick); return; }
-          pctEl.textContent = Math.min(cur + Math.ceil((100-cur)/3), 100) + '%';
-        }, 200);
-        // 轮询等待 ES 索引
-        var startCount = -1;
-        for (var i = 0; i < 30; i++) {
-          await new Promise(function(r){setTimeout(r,300);});
-          try {
-            var cr = await fetch('/my-tickets-count', { headers: { 'Authorization': 'Bearer '+getToken() } });
-            var cd = await cr.json();
-            if (startCount < 0) startCount = cd.total;
-            if (cd.total > startCount) break;
-          } catch(e) {}
-        }
-        clearInterval(aniTick);
-        pctEl.textContent = '100%';
-        setTimeout(function(){ location.href = 'list.html'; }, 300);
-      } catch(e) { clearInterval(tick); card.innerHTML = '<div style="color:#ef4444;text-align:center;">网络错误: '+e.message+'</div>'; }
+        if (res.ok) { location.href = 'list.html'; }
+        else { var err = await res.json().catch(function(){return {error:'未知错误'}}); card.innerHTML = '<div style="color:#ef4444;">提交失败: '+(err.error||JSON.stringify(err))+'</div>'; }
+      } catch(e) { card.innerHTML = '<div style="color:#ef4444;">网络错误: '+e.message+'</div>'; }
     }
 
     function cancelTicket() { document.getElementById('confirmCard').innerHTML = '<div style="color:#9ca3af;">已取消</div>'; }

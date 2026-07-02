@@ -245,10 +245,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ group: group })
         });
-        var t = allTicketsCache.find(function(x){return x.id===ticketId;});
-        if (t) t.group = group;
-        renderList();
-        setTimeout(function(){ loadDashboard(true); loadStats(); }, 2000);
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert('派单失败');
       }
@@ -262,10 +259,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ owner_id: parseInt(ownerId) })
         });
-        var t = allTicketsCache.find(function(x){return x.id===ticketId;});
-        if (t) { t.owner_id = parseInt(ownerId); var a = allAgents.find(function(x){return x.id===t.owner_id;}); if (a) t.owner = (a.firstname||'')+(a.lastname||''); }
-        renderList();
-        setTimeout(function(){ loadDashboard(true); loadStats(); }, 2000);
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert('分配处理人失败');
       }
@@ -281,10 +275,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state_id: stateId })
         });
-        var t = allTicketsCache.find(function(x){return x.id===ticketId;}); if (!t) t = allTicketsCache.find(function(x){return x.id===ticketId||x.id===parseInt(ticketId);});
-        if (t) t.state_id = stateId;
-        renderList();
-        setTimeout(function(){ loadDashboard(true); loadStats(); }, 2000);
+        loadDashboard(true); loadStats();
       } catch (err) {
         alert(`${label}失败`);
       }
