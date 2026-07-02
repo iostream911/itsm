@@ -17,9 +17,32 @@
     select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%236b7280'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
     textarea { resize: vertical; min-height: 100px; }
     select:focus, textarea:focus, input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-    .btn-submit { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn-submit { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; transition: background 0.3s; }
     .btn-submit:active { background: #1d4ed8; }
-    .btn-submit:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-submit:disabled { cursor: not-allowed; }
+    .btn-submit .btn-text { position: relative; z-index: 1; }
+    /* 扫描进度条 */
+    .btn-submit.scanning { background: #1e40af; }
+    .btn-submit.scanning::before {
+      content: '';
+      position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 30%, rgba(96,165,250,0.4) 50%, rgba(255,255,255,0.15) 70%, transparent 100%);
+      animation: scan 1.8s ease-in-out infinite;
+      z-index: 0;
+    }
+    @keyframes scan {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+    /* 脉冲圆点 */
+    .btn-submit .dot { display: inline-block; width: 6px; height: 6px; background: #60a5fa; border-radius: 50%; margin: 0 2px; vertical-align: middle; position: relative; z-index: 1; animation: pulse 1.2s ease-in-out infinite; }
+    .btn-submit .dot:nth-child(2) { animation-delay: 0.15s; }
+    .btn-submit .dot:nth-child(3) { animation-delay: 0.3s; }
+    .btn-submit .dot:nth-child(4) { animation-delay: 0.45s; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.8); opacity: 1; }
+    }
     .result { margin-top: 12px; padding: 12px 16px; border-radius: 8px; font-size: 14px; display: none; }
     .result.success { display: block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
     .result.error   { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
@@ -134,7 +157,8 @@
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
       const resultDiv = document.getElementById('result');
-      btn.disabled = true; btn.innerHTML = '<span class="loading"></span>提交中...';
+      btn.disabled = true; btn.className = 'btn-submit scanning';
+      btn.innerHTML = '<span class="btn-text">AI 智能分析中<span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
       try {
         const res = await apiFetch('/my-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -143,15 +167,26 @@
         if (!res.ok) { const err = await res.json(); throw new Error(err.error || '提交失败'); }
         const data = await res.json();
         resultDiv.className = 'result success';
-        resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在跳转...</div>`;
-        setTimeout(() => { location.href = 'list.html'; }, 1500);
+        resultDiv.innerHTML = `<div style="text-align:center">✅ 工单已创建<br><div class="ticket-number">#${data.number||data.id}</div><br><span class="loading-dark"></span><br>正在同步...</div>`;
         document.getElementById('category').value = '桌面运维';
         document.querySelectorAll('#categoryTiles .tile').forEach(t => t.classList.toggle('selected', t.dataset.value === '桌面运维'));
+        // 轮询等待 ES 索引完成，确认后再跳转
+        var startCount = -1;
+        for (var i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 500));
+          try {
+            var cr = await apiFetch('/my-tickets-count');
+            var cd = await cr.json();
+            if (startCount < 0) startCount = cd.total;
+            if (cd.total > startCount) { location.href = 'list.html'; return; }
+          } catch(e) {}
+        }
+        location.href = 'list.html';
       } catch (err) {
         if (err.message === '登录已过期') return;
         resultDiv.className = 'result error';
         resultDiv.innerHTML = `❌ ${err.message}`;
-      } finally { btn.disabled = false; btn.innerHTML = '提交工单'; }
+      } finally { btn.disabled = false; btn.className = 'btn-submit'; btn.innerHTML = '<span class="btn-text">提交工单</span>'; }
     });
   </script>
 </body>
