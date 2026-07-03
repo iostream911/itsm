@@ -80,6 +80,7 @@
     <div class="stats" id="stats"></div>
     <div class="pull-indicator" id="pullIndicator"></div>
     <div id="ticketList"></div>
+    <div id="scrollSentinel" style="height:1px;"></div>
   </div>
 
   <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
@@ -127,7 +128,7 @@
     }
 
     const statusMap = { 1: ['待处理', 'status-new'], 2: ['已打开', 'status-open'], 3: ['待提醒', 'status-pending'], 4: ['已关闭', 'status-closed'], 5: ['已合并', 'status-closed'], 6: ['待关闭', 'status-pending'] };
-    let allTickets = [], currentFilter = 'all', totalCount = 0;
+    let allTickets = [], currentFilter = 'all', totalCount = 0, loadingMore = false, hasMore = true;
 
     document.getElementById('stats').addEventListener('click', (e) => {
       const item = e.target.closest('.stat-item');
@@ -137,19 +138,31 @@
       renderTickets();
     });
 
-    async function loadTickets() {
+    async function loadTickets(reset) {
+      if (loadingMore) return;
+      if (reset) { allTickets = []; hasMore = true; }
+      if (!hasMore) return;
+      loadingMore = true;
       try {
         const [ticketsRes, countRes] = await Promise.all([
-          apiFetch('/my-tickets'),
+          apiFetch('/my-tickets?from=' + allTickets.length + '&size=15'),
           apiFetch('/my-tickets-count')
         ]);
         const data = await ticketsRes.json();
-        allTickets = Array.isArray(data) ? data : [];
+        const newTickets = Array.isArray(data) ? data : [];
+        if (newTickets.length < 15) hasMore = false;
+        allTickets = allTickets.concat(newTickets);
         const countData = await countRes.json();
         totalCount = countData.total || allTickets.length;
         updateStats(); renderTickets();
       } catch (err) { if (err.message==='登录已过期') return; }
+      loadingMore = false;
     }
+
+    var sentinel = document.getElementById('scrollSentinel');
+    new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting && !loadingMore && hasMore) loadTickets(false);
+    }, { rootMargin: '200px' }).observe(sentinel);
 
     function updateStats() {
       const closed = allTickets.filter(t => [4,5].includes(t.state_id)).length;
@@ -274,7 +287,7 @@
     document.addEventListener('touchmove', e => { if (!pulling||refreshing) return; if (e.touches[0].clientY-pullStartY>40&&window.scrollY===0) { pullEl.className='pull-indicator show'; pullEl.innerHTML='释放立即刷新'; } }, {passive:true});
     document.addEventListener('touchend', async () => { if (!pulling||refreshing) return; pulling=false; if (pullEl.classList.contains('show')) { refreshing=true; pullEl.innerHTML='<span class="pull-spinner"></span>刷新中...'; await loadTickets(); refreshing=false; pullEl.className='pull-indicator'; } });
 
-    initAuth().then(() => loadTickets());
+    initAuth().then(() => loadTickets(true));
   </script>
 </body>
 </html>
