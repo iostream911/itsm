@@ -131,24 +131,18 @@ app.get('/my-dashboard-count', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// 管理看板工单列表缓存（Zammad search 最多 200 条，offset 不生效）
-let sortedCache = { data: null, time: 0 };
+// 管理看板工单列表（ES 直查，无数量限制，新工单在前）
 app.get('/api/v1/tickets-sorted', async (req, res) => {
   try {
     const from = parseInt(req.query.from) || 0;
     const size = parseInt(req.query.size) || 15;
-    // 30 秒缓存，避免每次滚动都请求 Zammad
-    if (!sortedCache.data || Date.now() - sortedCache.time > 30000) {
-      const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Token token=${API_TOKEN}` },
-        body: JSON.stringify({ limit: 200, sort_by: 'created_at', order_by: 'desc', expand: true })
-      });
-      const data = await resp.json();
-      sortedCache.data = data.records || (Array.isArray(data) ? data : []);
-      sortedCache.time = Date.now();
-    }
-    res.json(sortedCache.data.slice(from, from + size));
+    const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
+    const esResp = await fetch(esUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, size, sort: [{ created_at: { order: 'desc' } }], query: { match_all: {} } })
+    });
+    const esData = await esResp.json();
+    res.json((esData.hits?.hits || []).map(h => mapTicketSource(h._source)));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
