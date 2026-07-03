@@ -54,12 +54,24 @@ function extractOrg(dn) {
   return ouList.join('/');
 }
 
-// 按名称查找或创建 Zammad 组织
+// 按名称查找或创建 Zammad 组织（直查 ES，绕过 Zammad 搜索 API 问题）
 async function findOrCreateOrg(name) {
   if (!name) return null;
   const headers = { Authorization: `Token token=${API_TOKEN}` };
 
-  // 搜索
+  // ES 直查
+  try {
+    const esUrl = 'http://10.43.240.116:9200/zammad_production_production_organization/_search';
+    const esResp = await fetch(esUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: 1, query: { term: { 'name.keyword': name } } })
+    });
+    const esData = await esResp.json();
+    const hit = esData.hits?.hits?.[0];
+    if (hit && hit._source.id) return hit._source.id;
+  } catch(e) {}
+
+  // Zammad API 兜底搜索
   const searchRes = await fetch(
     `${ZAMMAD_URL}/api/v1/organizations/search?query=${encodeURIComponent(name)}&limit=1`,
     { headers }
