@@ -8,7 +8,7 @@ const path = require('path');
 
 const SSO_URL = 'http://sso.szctdg.com:8080/WLUM/api/sync/user';
 const SEQ_FILE = path.join(__dirname, '..', '.sync-sequence');
-const ZAMMAD_URL = 'http://localhost:8088';
+const ZAMMAD_URL = process.env.ZAMMAD_URL || 'http://172.24.16.40:30082';
 const API_TOKEN = process.env.ZAMMAD_TOKEN || '';
 const TEST_LIMIT = 0; // 全量同步
 const BATCH_DELAY = 200;
@@ -141,7 +141,7 @@ async function main() {
   console.log(`[筛选] 符合条件 (syncType=1 + state=1 + 手机): ${validUsers.length} 人`);
 
   // 测试模式
-  const toImport = validUsers.slice(0, TEST_LIMIT);
+  const toImport = TEST_LIMIT > 0 ? validUsers.slice(0, TEST_LIMIT) : validUsers;
   console.log(`[测试] 导入前 ${toImport.length} 条\n`);
 
   // 缓存组织 ID
