@@ -116,22 +116,22 @@ async function main() {
   // 记录最大同步序列号
   let maxSequence = 0;
 
-  // 筛选：syncType=1 + state=1 + 有手机号
-  const validUsers = [];
+  // 按 account 去重，取每个用户最新记录。筛选：state=1 + 有手机号
+  const userMap = new Map();
   for (const u of allUsers) {
     const sc = u.syncContent?.[0] || {};
+    const account = sc.account;
+    const seq = Number(u.syncSequence) || 0;
+    if (seq > maxSequence) maxSequence = seq;
+    const exist = userMap.get(account);
+    if (!exist || seq > (exist._seq || 0)) userMap.set(account, { ...sc, _seq: seq });
+  }
+  const validUsers = [];
+  for (const [account, sc] of userMap) {
     const mobile = (sc.mobile || '').trim();
-    const state = sc.state;
-    const syncType = u.syncType;
-    if (syncType === '1' && state === 1 && mobile) {
-      // 记录最大流水号
-      const seq = Number(u.syncSequence) || 0;
-      if (seq > maxSequence) maxSequence = seq;
-
+    if (sc.state === 1 && mobile) {
       validUsers.push({
-        account: sc.account,
-        name: sc.name,
-        mobile,
+        account, name: sc.name, mobile,
         email: sc.email || '',
         orgName: extractOrg(sc.dn || ''),
         orgid: sc.orgid || ''
