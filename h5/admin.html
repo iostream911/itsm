@@ -83,7 +83,7 @@
 
     <div class="section">
       <div class="section-title">
-        <span id="listTitle">待分配工单</span>
+        <span id="listTitle">全部工单</span>
         <span class="badge badge-danger" id="listCount">0</span>
       </div>
       <div id="ticketList">
@@ -105,7 +105,7 @@
     const groups = ['桌面运维', '网络运维', '应用系统运维'];
     const statusMap = { 1: '待处理', 2: '已打开', 3: '待提醒', 4: '已关闭', 5: '已合并', 6: '待关闭' };
     const filterLabels = { new: '待分配（未指派人）', open: '处理中（已指派）', closed: '已完成工单', overdue: '超时工单', all: '全部工单' };
-    let currentFilter = 'open';
+    let currentFilter = 'all';
     let currentTimeRange = 'today';
     let allAgents = [];
     let allTicketsCache = [];
