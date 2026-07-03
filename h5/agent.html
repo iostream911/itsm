@@ -72,6 +72,7 @@
   <div class="container">
     <div class="stats" id="statsCards"></div>
     <div id="ticketList"><div style="text-align:center;padding:40px;color:#9ca3af;">加载中...</div></div>
+    <div id="scrollSentinel" style="height:1px;"></div>
   </div>
 
   <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
@@ -130,12 +131,20 @@
       renderList(); updateStats();
     });
 
-    async function loadDashboard() {
+    var dashboardLoading = false, dashboardHasMore = true;
+
+    async function loadDashboard(reset) {
+      if (dashboardLoading) return;
+      if (reset) { allTickets = []; dashboardHasMore = true; }
+      if (!dashboardHasMore) return;
+      dashboardLoading = true;
       try {
-        const res = await apiFetch('/my-dashboard');
+        const res = await apiFetch('/my-dashboard?from=' + allTickets.length + '&size=15');
         const data = await res.json();
-        allTickets = Array.isArray(data) ? data : [];
-        // 合并本地修改：后台 reload 时保留刚操作过的工单状态
+        var newTickets = Array.isArray(data) ? data : [];
+        if (newTickets.length < 15) dashboardHasMore = false;
+        if (reset) allTickets = newTickets;
+        else allTickets = allTickets.concat(newTickets);
         Object.keys(pendingChanges).forEach(function(id){
           var t = allTickets.find(function(x){return x.id===parseInt(id);});
           if (t) Object.assign(t, pendingChanges[id]);
@@ -143,6 +152,7 @@
         now = Date.now();
         renderList(); updateStats();
       } catch (e) { if (e.message==='登录已过期') return; }
+      dashboardLoading = false;
     }
 
     function updateStats() {
@@ -261,7 +271,7 @@
           pendingChanges[ticketId] = { owner_id: newOwnerId };
           if (newGroup) pendingChanges[ticketId].group = newGroup;
           renderList(); updateStats();
-          setTimeout(function(){ loadDashboard(); delete pendingChanges[ticketId]; }, 5000);
+          setTimeout(function(){ loadDashboard(true); delete pendingChanges[ticketId]; }, 5000);
         } else {
           const err = await res.json().catch(() => ({}));
           alert('转派失败: ' + (err.error || '未知错误'));
@@ -280,7 +290,7 @@
       pendingChanges[id] = { state_id: newState };
       renderList(); updateStats();
       // 后台同步，ES 追上来后清除本地修改
-      setTimeout(function(){ loadDashboard(); delete pendingChanges[id]; }, 5000);
+      setTimeout(function(){ loadDashboard(true); delete pendingChanges[id]; }, 5000);
     }
 
     async function sendReply(ticketId) {
@@ -305,7 +315,11 @@
 
     function closeModal(e) { if (e&&e.target!==document.getElementById('modalOverlay')) return; document.getElementById('modalOverlay').style.display='none'; document.body.style.overflow=''; }
 
-    initAuth().then(() => { loadAgentList(); loadDashboard(); });
+    initAuth().then(() => { loadAgentList(); loadDashboard(true); });
+    var sentinel = document.getElementById('scrollSentinel');
+    new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting && !dashboardLoading && dashboardHasMore) loadDashboard(false);
+    }, { rootMargin: '200px' }).observe(sentinel);
   </script>
 </body>
 </html>

@@ -844,10 +844,12 @@ app.get('/my-dashboard', authMiddleware, async (req, res) => {
     const userId = await findZammadUserId(phone);
     if (!userId) return res.json([]);
 
+    const from = parseInt(req.query.from) || 0;
+    const size = parseInt(req.query.size) || 15;
     const esUrl = 'http://zammad-elasticsearch:9200/zammad_production_production_ticket/_search';
     const esResp = await fetch(esUrl, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ size: 50, sort: [{ created_at: { order: 'desc' } }], query: { term: { owner_id: userId } } })
+      body: JSON.stringify({ from, size, sort: [{ created_at: { order: 'desc' } }], query: { term: { owner_id: userId } } })
     });
     const esData = await esResp.json();
     res.json((esData.hits?.hits || []).map(h => mapTicketSource(h._source)));
