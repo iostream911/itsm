@@ -136,13 +136,16 @@ app.get('/api/v1/tickets-sorted', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const perPage = parseInt(req.query.per_page) || 15;
+    // Zammad search API 不支持 offset 分页，用 limit 取前 N 条再 JS 切片
     const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Token token=${API_TOKEN}` },
-      body: JSON.stringify({ limit: perPage, offset: (page - 1) * perPage, sort_by: 'created_at', order_by: 'desc', expand: true })
+      body: JSON.stringify({ limit: perPage * page, sort_by: 'created_at', order_by: 'desc', expand: true })
     });
     const data = await resp.json();
-    res.json(data.records || (Array.isArray(data) ? data : []));
+    const all = data.records || (Array.isArray(data) ? data : []);
+    const start = (page - 1) * perPage;
+    res.json(all.slice(start, start + perPage));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
