@@ -140,22 +140,18 @@
       } catch (e) { /* ignore */ }
     }
 
-    var ticketPage = 1, ticketHasMore = true, ticketLoading = false;
+    var ticketLoading = false, ticketHasMore = true;
 
     async function loadDashboard(reset) {
       if (ticketLoading) return;
-      if (reset) { ticketPage = 1; ticketHasMore = true; allTicketsCache = []; }
+      if (reset) { allTicketsCache = []; ticketHasMore = true; }
       if (!ticketHasMore) return;
       ticketLoading = true;
       try {
-        var r = await fetch(`${API}/tickets-sorted?page=${ticketPage}&per_page=15`, { headers: {} });
+        var r = await fetch(`${API}/tickets-sorted?from=${allTicketsCache.length}&size=15`, { headers: {} });
         var d = await r.json();
-        if (!Array.isArray(d) || d.length === 0) { ticketHasMore = false; }
-        else {
-          allTicketsCache = allTicketsCache.concat(d);
-          ticketPage++;
-          if (d.length < 15) ticketHasMore = false;
-        }
+        if (!Array.isArray(d) || d.length < 15) ticketHasMore = false;
+        if (d.length > 0) allTicketsCache = allTicketsCache.concat(d);
         now = Date.now();
         renderList();
         document.getElementById('refreshStatus').textContent = `最后刷新 ${new Date().toLocaleTimeString('zh-CN')}`;
